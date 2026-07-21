@@ -1,0 +1,41 @@
+name: test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  sim:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        block: [snes, vga, twin]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install iverilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install python deps
+        run: pip install -r test/requirements.txt
+
+      - name: run ${{ matrix.block }}
+        working-directory: test
+        run: python run.py ${{ matrix.block }}
+
+      - name: check results
+        working-directory: test
+        run: |
+          test -f results_${{ matrix.block }}.xml
+          ! grep -q '<failure' results_${{ matrix.block }}.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-${{ matrix.block }}
+          path: test/results_*.xml

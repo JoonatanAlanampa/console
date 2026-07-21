@@ -1,0 +1,8 @@
+# simulation
+test/sim_build/
+test/__pycache__/
+test/results*.xml
+test/*.fst
+test/*.vcd
+# fpga
+fpga/build/
