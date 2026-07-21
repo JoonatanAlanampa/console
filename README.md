@@ -12,7 +12,7 @@ the constraints that shape the design are in [PLAN.md](PLAN.md).
 ## What runs today
 
 ```
-python test/run.py          # all three suites, ~3 min
+python test/run.py          # all three suites, ~22 s
 python test/run.py snes     # SNES pad controller        5 tests
 python test/run.py vga      # VGA race-the-beam timing   6 tests
 python test/run.py twin     # CORDIC-1 RTL vs own-cell netlist   5 tests
