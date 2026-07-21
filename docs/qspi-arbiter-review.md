@@ -57,10 +57,58 @@ That is precisely the risk §6 spends its large margin defending against.
 Buying ~1.3 % of the tile budget removes the need for that defence and
 simplifies §5 from a hard-real-time problem to a throughput problem.
 
-**Recommendation:** re-open the line-buffer decision as an explicit
-architectural fork. It costs money (tiles) so it is the user's call, but
-the spec should present it as a live option with corrected numbers, not a
-closed one.
+### It is not a yes/no — it is a depth, and the cost is linear
+
+Framing this as "line buffer or not" is the spec's second mistake, and
+mine in the first draft of this review. What is actually being bought is
+**how many bytes of fetch run ahead of the beam**, and the price scales
+with that depth.
+
+Video consumes 120 B per source line over two displayed lines (51.2 µs
+visible), i.e. **one byte per ~430 ns**. So depth converts directly into
+stall immunity:
+
+| depth | flops | ~cells | absorbs | survives |
+|---|---|---|---|---|
+| today's "small working set" | ~30 | ~50 | ~1.3 µs | one CPU burst, marginally |
+| **~20 bytes** | 160 | **~240** | **8.6 µs** | **the 8 µs tCEM PSRAM stall** |
+| half line (~60 B) | 320 | ~480 | ~26 µs | any single stall within half a line |
+| full line, ping-pong | 1280 | ~1900 | a whole line | everything; full decoupling |
+
+Two corrections to earlier numbers in this document:
+
+- A *usable* full-line buffer must be **ping-pong** — line n+1 cannot be
+  written into the buffer line n is being read from — so it is ~1280 flops
+  / ~1900 cells (~2.6 % of a 14-tile console), not the ~960 quoted above.
+- The interesting entry is not the full line. **~240 cells buys immunity
+  to the one stall whose size is actually known** (tCEM, 8 µs, documented
+  in `pmod-cartridge/fpga/README.md`). That is a rounding error against
+  any console tile budget.
+
+### The real gap: the working-set depth is never specified
+
+§3 says video runs from "a handful of tile indices and pattern bytes held
+in flops" and never says how many. Every safety claim in §5 and §6 depends
+on that number:
+
+- to survive one 16 B CPU burst (1.28 µs) video needs **≥ 3 bytes** buffered;
+- to survive a tCEM-bounded PSRAM stall (8 µs) it needs **≥ 19 bytes**.
+
+As written, the design may already be safe against the first and is almost
+certainly not safe against the second — but nobody can tell, because the
+depth is not in the document. **Specify the working-set depth in bytes,
+and state which stalls it covers.** That single number is more important
+than the line-buffer decision itself, because it is what makes §6's margin
+either real or decorative.
+
+**Recommendation:** replace the closed "no line buffer" conclusion with an
+explicit depth choice. The engineering recommendation is **≥ 20 bytes**
+(~240 cells) as the floor, because it is cheap and it covers the only
+stall with a known magnitude; going to a full ping-pong line buffer
+(~1900 cells) is a further, defensible purchase that converts video from a
+hard-real-time master into a throughput one and would simplify §5. Both
+are affordable; "none" is the only option the corrected arithmetic does
+not support.
 
 ## F2 — §4/§6 conflate average with peak (blocking)
 

@@ -2,13 +2,16 @@
 
 **Status: DRAFT — REVIEWED 2026-07-21, see
 [`qspi-arbiter-review.md`](qspi-arbiter-review.md).** The arbitration
-policy (§5) passed review and may go to RTL. Four items must be fixed
-first: **§3's "no line buffer" conclusion is wrong** (the cost was
-overstated 3-5x and compared against the wrong tile budget — the decision
-is re-opened), **§4/§6 budget averages where peak is required** (120 B,
-not 60 B, on a fetching line), **sprites are missing from the bandwidth
-model entirely**, and **§7 has no write-data channel**. Do not commit RTL
-against §3, §4 or §7 until they are revised.
+policy (§5) passed review and may go to RTL. **§3 has been rewritten**:
+its "no line buffer" conclusion was wrong (cost overstated 3-5x, compared
+against the wrong tile budget, sized for the wrong mode) and is replaced
+by an explicit **fetch-depth decision — recommendation ≥ 20 bytes**.
+Three items remain: **§4/§6 budget averages where peak is required**
+(120 B, not 60 B, on a fetching line, and whether the fetch spans one
+line time or two is undecided), **sprites are missing from the bandwidth
+model entirely**, and **§7 has no write-data channel** (plus `addr[23]`
+truncates the 16 MB flash to 8 MB). Do not commit RTL against §4 or §7
+until they are revised.
 
 ---
 
@@ -49,18 +52,64 @@ which is the first hard conclusion:
 > 32 µs line time. `vga_timing.line_fetch` marks the start of that
 > window and `next_y` names the line to prepare (src/vga_timing.sv).
 
-## 3. Why there is no line buffer
+## 3. How far ahead of the beam do we fetch? (OPEN DECISION)
 
-The obvious answer — buffer a scanline, fill it during blanking — needs
-640 px × 2 bpp = 1280 flip-flops. On the measured cell economics of this
-project (CORDIC-1: 921 cells for 191 flops, i.e. ~4.8 cells per flop) a
-1280-bit line buffer alone is ~6100 cells, five times the entire 1x2
-tile that the vertical slice occupies. A line buffer is not affordable
-at any tile count we would actually buy.
+> **Revised after review.** An earlier version of this section concluded
+> that a line buffer was unaffordable and closed the question. That
+> conclusion was wrong — see
+> [`qspi-arbiter-review.md`](qspi-arbiter-review.md) F1. It costed the
+> buffer at CORDIC-1's *whole-design* ratio of 4.8 cells/flop (which
+> counts that design's combinational logic, not the marginal cost of a
+> storage bit — a shift-register buffer is ~1.5), compared it against a
+> 1x2 tile when the vertical slice places 3450 cells in one at 47.6 %
+> utilization, and sized it for 640 px while §4 recommends 320.
 
-So pixels are produced as the beam arrives, from a *small* working set:
-a handful of tile indices and pattern bytes held in flops, refilled
-continuously. The arbiter's job is to keep that trickle unbroken.
+**The real question is not "buffer or no buffer" — it is how many bytes
+of fetch run ahead of the beam.** That depth is what converts memory
+jitter into either a visible tear or nothing at all, and its price is
+linear.
+
+Video consumes 120 B per source line across two displayed lines
+(51.2 µs visible) — **one byte per ~430 ns**. So:
+
+| depth | flops | ~cells | absorbs a stall of | survives |
+|---|---|---|---|---|
+| "small working set" | ~30 | ~50 | ~1.3 µs | one 16 B CPU burst, marginally |
+| **20 bytes** | 160 | **~240** | **8.6 µs** | the 8 µs tCEM PSRAM stall |
+| half line (60 B) | 320 | ~480 | ~26 µs | any single stall within half a line |
+| full line, ping-pong | 1280 | ~1900 | a whole line | everything |
+
+A full-line buffer must be **ping-pong** — line *n+1* cannot be written
+into the buffer line *n* is being read from — hence 2 x 640 flops.
+~1900 cells is ~2.6 % of a 14-tile console, not five tiles.
+
+**What depth buys, in deadline terms.** With a shallow working set the
+deadline is *per byte*: every byte must arrive before the pixels it
+encodes reach the screen, and any stall longer than the working set is
+visible corruption on that scanline, every frame it recurs. With a full
+line buffer the deadline becomes *per line*: 120 B must land somewhere
+inside a 32 µs window, and video stops being a hard-real-time master at
+all. Intermediate depths buy proportional immunity.
+
+**One thing a line buffer does NOT buy**, and the reason the original
+section reached for it: it does not let the fetch live in blanking.
+6.4 µs of blanking cannot carry a 9.6 µs fetch at any depth (§2). Depth
+buys *elasticity*, not a smaller fetch.
+
+### Required: state the working-set depth
+
+However this decision goes, **the chosen depth must be written down in
+bytes**, because every margin claim in §5 and §6 depends on it:
+
+- ≥ 3 bytes to survive one 16 B CPU burst (1.28 µs);
+- ≥ 19 bytes to survive a tCEM-bounded PSRAM stall (8 µs — a datasheet
+  bound, documented in `pmod-cartridge/fpga/README.md`).
+
+**Recommendation: ≥ 20 bytes as the floor** (~240 cells — a rounding
+error against any console tile budget) because it covers the only stall
+whose magnitude is actually known. A full ping-pong line buffer is a
+further defensible purchase that would simplify §5 considerably. What the
+corrected arithmetic does *not* support is leaving the depth unspecified.
 
 ## 4. Video bandwidth by mode (the decision this document exists for)
 
