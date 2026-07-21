@@ -39,3 +39,31 @@ jobs:
         with:
           name: results-${{ matrix.block }}
           path: test/results_*.xml
+
+  # The Windows host this project is developed on has no `make`, so the
+  # Makefile can only be verified here. It runs the twin suite, which is
+  # the one with a build step (the netlist module rename) in front of it.
+  make:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install iverilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install python deps
+        run: pip install -r test/requirements.txt
+
+      - name: make BLOCK=twin
+        working-directory: test
+        run: make BLOCK=twin
+
+      - name: check results
+        working-directory: test
+        run: |
+          test -f results.xml
+          ! grep -q '<failure' results.xml
