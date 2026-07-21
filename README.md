@@ -18,7 +18,8 @@ python test/run.py vga      # VGA race-the-beam timing   6 tests
 python test/run.py twin     # CORDIC-1 RTL vs own-cell netlist   5 tests
 ```
 
-`make -C test BLOCK=snes` does the same thing if you prefer make.
+`make -C test BLOCK=snes` runs one suite if you prefer make;
+`make -C test blocks` runs all three.
 
 ### The gate-level twin
 

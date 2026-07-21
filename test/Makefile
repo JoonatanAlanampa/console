@@ -46,9 +46,15 @@ ifeq ($(BLOCK),twin)
   VERILOG_SOURCES += $(PWD)/tb_cordic_twin.v
 endif
 
-all:
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# `blocks`, not `all`: cocotb's Makefile.sim already defines `all`, and a
+# target of that name here both shadows it and — because it would be the
+# first target in the file — becomes the default goal, so each recursive
+# call re-enters it. That recursion does not terminate (found by a CI job
+# that ran for seven minutes doing nothing).
+.PHONY: blocks
+blocks:
 	$(MAKE) BLOCK=snes
 	$(MAKE) BLOCK=vga
 	$(MAKE) BLOCK=twin
-
-include $(shell cocotb-config --makefiles)/Makefile.sim
