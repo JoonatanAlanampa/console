@@ -1,9 +1,14 @@
 # QSPI memory arbiter — specification
 
-**Status: DRAFT, REVIEW PENDING.** This document is the design input for
-the console's single hardest problem. It was written to be argued with;
-the arbitration policy and the video mode decision in §6 should get a
-proper design review before any RTL is committed to them.
+**Status: DRAFT — REVIEWED 2026-07-21, see
+[`qspi-arbiter-review.md`](qspi-arbiter-review.md).** The arbitration
+policy (§5) passed review and may go to RTL. Four items must be fixed
+first: **§3's "no line buffer" conclusion is wrong** (the cost was
+overstated 3-5x and compared against the wrong tile budget — the decision
+is re-opened), **§4/§6 budget averages where peak is required** (120 B,
+not 60 B, on a fetching line), **sprites are missing from the bandwidth
+model entirely**, and **§7 has no write-data channel**. Do not commit RTL
+against §3, §4 or §7 until they are revised.
 
 ---
 
