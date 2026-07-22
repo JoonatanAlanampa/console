@@ -106,6 +106,15 @@ SUITES = {
             TEST_DIR / "tb_soc.v",
         ],
     ),
+    "cpuadapt": dict(
+        top="tb_cpuadapt",
+        module="test_cpuadapt",
+        sources=lambda: [
+            SRC / "cpu_adapter.sv", SRC / "sysregs.sv",
+            SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
+            TEST_DIR / "tb_cpuadapt.v",
+        ],
+    ),
 }
 
 

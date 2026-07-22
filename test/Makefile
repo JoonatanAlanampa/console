@@ -76,6 +76,13 @@ ifeq ($(BLOCK),soc)
   VERILOG_SOURCES += $(SRC_DIR)/console_soc.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/vga_engine.sv $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/audio.sv $(SRC_DIR)/snes_pad.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_soc.v
 endif
 
+ifeq ($(BLOCK),cpuadapt)
+  SIM_BUILD = sim_build/cpuadapt
+  TOPLEVEL  = tb_cpuadapt
+  COCOTB_TEST_MODULES = test_cpuadapt
+  VERILOG_SOURCES += $(SRC_DIR)/cpu_adapter.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_cpuadapt.v
+endif
+
 ifeq ($(BLOCK),twin)
   SIM_BUILD = sim_build/twin
   TOPLEVEL  = tb_cordic_twin
@@ -107,3 +114,4 @@ blocks:
 	$(MAKE) BLOCK=vengine
 	$(MAKE) BLOCK=audio
 	$(MAKE) BLOCK=soc
+	$(MAKE) BLOCK=cpuadapt
