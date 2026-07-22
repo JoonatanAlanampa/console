@@ -50,6 +50,12 @@ module qspi_arbiter #(
     input  logic        clk,
     input  logic        rst,
     input  logic [1:0]  cfg,               // to compute the PSRAM tCEM cap
+    // Race-the-beam lock: while high, only the video master (0) is eligible, so
+    // a lower-priority master cannot start a burst in the gaps between video's
+    // many small line-fetch requests (priority alone loses those gaps because a
+    // served master must drop req before re-winning). The video engine raises it
+    // for the duration of a line fetch; the CPU runs the rest of the line time.
+    input  logic        vid_lock,
 
     // master request ports (4), priority = index (0 highest)
     input  logic [3:0]  m_req,
@@ -94,7 +100,7 @@ module qspi_arbiter #(
     sel = 2'd0;
     any = 1'b0;
     for (int i = 3; i >= 0; i--)
-      if (m_req[i] && !served[i]) begin
+      if (m_req[i] && !served[i] && (!vid_lock || i == 0)) begin
         sel = i[1:0];
         any = 1'b1;
       end

@@ -69,6 +69,16 @@ SUITES = {
             TEST_DIR / "tb_arb.v",
         ],
     ),
+    "vfetch": dict(
+        top="tb_vfetch",
+        module="test_vfetch",
+        sources=lambda: [
+            SRC / "vga_fetch.sv",
+            SRC / "qspi_arbiter.sv",
+            SRC / "qspi_ctrl.sv",
+            TEST_DIR / "tb_vfetch.v",
+        ],
+    ),
 }
 
 

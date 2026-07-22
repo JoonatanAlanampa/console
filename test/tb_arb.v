@@ -43,7 +43,7 @@ module tb_arb ();
   wire        cs_flash_n, cs_ram_n;
 
   qspi_arbiter arb (
-      .clk (clk), .rst (rst), .cfg (cfg),
+      .clk (clk), .rst (rst), .cfg (cfg), .vid_lock (1'b0),
       .m_req (m_req), .m_we (m_we), .m_dev (m_dev),
       .m_addr (m_addr), .m_len (m_len), .m_wdata (m_wdata),
       .m_ack (m_ack), .m_wnext (m_wnext), .m_rvalid (m_rvalid), .m_rdata (m_rdata),
