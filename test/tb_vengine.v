@@ -15,6 +15,7 @@ module tb_vengine ();
   reg         clk;
   reg         rst;
   reg  [1:0]  cfg;
+  reg  [255:0] oam;             // 8 sprites x 32 bit
 
   // vga_timing outputs
   wire        hsync, vsync, de, line_fetch, frame_start, pre_line;
@@ -61,6 +62,7 @@ module tb_vengine ();
       .clk (clk), .rst (rst),
       .de (de), .x (x), .y (y), .frame_start (frame_start),
       .line_fetch (line_fetch), .next_y (next_y),
+      .oam (oam),
       .r (r), .g (g), .b (b),
       .vid_req (vid_req), .vid_dev (vid_dev), .vid_addr (vid_addr),
       .vid_len (vid_len), .vid_lock (vid_lock),
