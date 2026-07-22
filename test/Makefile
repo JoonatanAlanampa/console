@@ -3,7 +3,8 @@
 #   make BLOCK=snes     SNES pad controller
 #   make BLOCK=vga      VGA race-the-beam timing core
 #   make BLOCK=twin     CORDIC-1 RTL vs own-cell gate netlist
-#   make all            all three
+#   make BLOCK=qspi     quad-mode QSPI memory controller
+#   make all            all of them
 #
 # `python run.py` does the same thing without make, which is how it is
 # usually run on the Windows host.
@@ -33,6 +34,13 @@ ifeq ($(BLOCK),vga)
   VERILOG_SOURCES += $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/vga_testpat.sv $(PWD)/tb_vga.v
 endif
 
+ifeq ($(BLOCK),qspi)
+  SIM_BUILD = sim_build/qspi
+  TOPLEVEL  = tb_qspi
+  COCOTB_TEST_MODULES = test_qspi
+  VERILOG_SOURCES += $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_qspi.v
+endif
+
 ifeq ($(BLOCK),twin)
   SIM_BUILD = sim_build/twin
   TOPLEVEL  = tb_cordic_twin
@@ -58,3 +66,4 @@ blocks:
 	$(MAKE) BLOCK=snes
 	$(MAKE) BLOCK=vga
 	$(MAKE) BLOCK=twin
+	$(MAKE) BLOCK=qspi

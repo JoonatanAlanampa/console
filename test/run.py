@@ -55,6 +55,11 @@ SUITES = {
         module="test_cordic_twin",
         sources=twin_sources,
     ),
+    "qspi": dict(
+        top="tb_qspi",
+        module="test_qspi",
+        sources=lambda: [SRC / "qspi_ctrl.sv", TEST_DIR / "tb_qspi.v"],
+    ),
 }
 
 
