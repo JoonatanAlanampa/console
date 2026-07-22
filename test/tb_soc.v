@@ -38,8 +38,7 @@ module tb_soc ();
   // outputs
   wire [1:0]  vga_r, vga_g, vga_b;
   wire        hsync, vsync, audio_out;
-  wire        pad_latch, pad_clk;
-  reg  [1:0]  pad_data;
+  reg  [11:0] pad0_btn, pad1_btn;
 
   // QSPI pads
   wire        sck;
@@ -58,7 +57,7 @@ module tb_soc ();
       .m_rdata (m_rdata),
       .vga_r (vga_r), .vga_g (vga_g), .vga_b (vga_b),
       .hsync (hsync), .vsync (vsync), .audio_out (audio_out),
-      .pad_latch (pad_latch), .pad_clk (pad_clk), .pad_data (pad_data),
+      .pad0_btn (pad0_btn), .pad1_btn (pad1_btn),
       .sck (sck), .sd_out (sd_out), .sd_oe (sd_oe), .sd_in (sd_in),
       .cs_flash_n (cs_flash_n), .cs_ram_n (cs_ram_n)
   );

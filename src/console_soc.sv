@@ -61,10 +61,11 @@ module console_soc (
     // audio out (cartridge Pmod uio[7])
     output logic        audio_out,
 
-    // SNES pads
-    output logic        pad_latch,
-    output logic        pad_clk,
-    input  logic [1:0]  pad_data,
+    // input buttons (direct GPIO on ui -- the SNES serial reader needs
+    // latch/clk OUTPUT pins this pinout has none of, so pads are read as GPIO;
+    // snes_pad stays in the tree for a future controller-Pmod revision)
+    input  logic [11:0] pad0_btn,
+    input  logic [11:0] pad1_btn,
 
     // QSPI pads (cartridge Pmod)
     output logic        sck,
@@ -93,21 +94,13 @@ module console_soc (
   logic [15:0]  v_vol;
   logic         video_en;
   logic [1:0]   cfg;
-  logic [23:0]  btn;
 
   sysregs regs (
       .clk (clk), .rst (rst),
       .sel (m_sel), .we (m_we), .addr (m_addr), .wdata (m_wdata), .rdata (m_rdata),
       .oam (oam), .v_freq (v_freq), .v_wave (v_wave), .v_vol (v_vol),
       .video_en (video_en), .cfg (cfg),
-      .pad0 (btn[11:0]), .pad1 (btn[23:12])
-  );
-
-  // ------------------------------------------------------------------- input pads
-  snes_pad pads (
-      .clk (clk), .rst (rst),
-      .pad_latch (pad_latch), .pad_clk (pad_clk), .pad_data (pad_data),
-      .btn (btn), .strobe ()
+      .pad0 (pad0_btn), .pad1 (pad1_btn)
   );
 
   // ------------------------------------------------------------------------ audio

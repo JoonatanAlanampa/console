@@ -73,7 +73,7 @@ ifeq ($(BLOCK),soc)
   SIM_BUILD = sim_build/soc
   TOPLEVEL  = tb_soc
   COCOTB_TEST_MODULES = test_soc
-  VERILOG_SOURCES += $(SRC_DIR)/console_soc.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/vga_engine.sv $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/audio.sv $(SRC_DIR)/snes_pad.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_soc.v
+  VERILOG_SOURCES += $(SRC_DIR)/console_soc.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/vga_engine.sv $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/audio.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_soc.v
 endif
 
 ifeq ($(BLOCK),cpuadapt)
@@ -81,6 +81,13 @@ ifeq ($(BLOCK),cpuadapt)
   TOPLEVEL  = tb_cpuadapt
   COCOTB_TEST_MODULES = test_cpuadapt
   VERILOG_SOURCES += $(SRC_DIR)/cpu_adapter.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_cpuadapt.v
+endif
+
+ifeq ($(BLOCK),boot)
+  SIM_BUILD = sim_build/boot
+  TOPLEVEL  = tb_boot
+  COCOTB_TEST_MODULES = test_boot
+  VERILOG_SOURCES += $(SRC_DIR)/tt_um_joonatanalanampa_console.sv $(SRC_DIR)/cpu_adapter.sv $(SRC_DIR)/console_soc.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/vga_engine.sv $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/audio.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(VENDOR_DIR)/rv32_core.sv $(VENDOR_DIR)/control.sv $(VENDOR_DIR)/immgen.sv $(VENDOR_DIR)/regfile.sv $(VENDOR_DIR)/alu.sv $(VENDOR_DIR)/branch.sv $(VENDOR_DIR)/uart_tx.sv $(PWD)/tb_boot.v
 endif
 
 ifeq ($(BLOCK),twin)
@@ -115,3 +122,4 @@ blocks:
 	$(MAKE) BLOCK=audio
 	$(MAKE) BLOCK=soc
 	$(MAKE) BLOCK=cpuadapt
+	$(MAKE) BLOCK=boot

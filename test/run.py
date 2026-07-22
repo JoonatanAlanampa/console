@@ -102,7 +102,7 @@ SUITES = {
         sources=lambda: [
             SRC / "console_soc.sv", SRC / "sysregs.sv", SRC / "vga_engine.sv",
             SRC / "vga_fetch.sv", SRC / "vga_timing.sv", SRC / "audio.sv",
-            SRC / "snes_pad.sv", SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
+            SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
             TEST_DIR / "tb_soc.v",
         ],
     ),
@@ -113,6 +113,19 @@ SUITES = {
             SRC / "cpu_adapter.sv", SRC / "sysregs.sv",
             SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
             TEST_DIR / "tb_cpuadapt.v",
+        ],
+    ),
+    "boot": dict(
+        top="tb_boot",
+        module="test_boot",
+        sources=lambda: [
+            SRC / "tt_um_joonatanalanampa_console.sv", SRC / "cpu_adapter.sv",
+            SRC / "console_soc.sv", SRC / "sysregs.sv", SRC / "vga_engine.sv",
+            SRC / "vga_fetch.sv", SRC / "vga_timing.sv", SRC / "audio.sv",
+            SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
+            VENDOR / "rv32_core.sv", VENDOR / "control.sv", VENDOR / "immgen.sv",
+            VENDOR / "regfile.sv", VENDOR / "alu.sv", VENDOR / "branch.sv",
+            VENDOR / "uart_tx.sv", TEST_DIR / "tb_boot.v",
         ],
     ),
 }

@@ -42,3 +42,18 @@ synthesize without them. Pin names and functions taken from `stdcells`
 `out/own.lib` and `flow/run_lvs_all.py`. Functional only — no timing;
 timing is OpenSTA's job in the stdcells hardening and silicon's job in
 the vertical slice.
+
+## rv32_core.sv + control/immgen/regfile/alu/uart_tx (TinyRV32 core)
+
+Read-only copies from `tt-riscv` (github.com/JoonatanAlanampa/RISC-V_CPU),
+`src/` at commit `d552e85`. The proven RV32E core (passes 40/40 rv32ui).
+Used by `tt_um_joonatanalanampa_console` through `src/cpu_adapter.sv`, which
+converts its word memory interface to the console's byte-streaming bus.
+
+| file | source repo | path | commit |
+|---|---|---|---|
+| `rv32_core.sv` | `tt-riscv` | `src/rv32_core.sv` | `d552e85` |
+| `control.sv` `immgen.sv` `regfile.sv` `alu.sv` `uart_tx.sv` | `tt-riscv` | `src/` | `d552e85` |
+
+**Refresh check:** if the tt-riscv core changes, re-copy these and re-run
+`python test/run.py boot`.

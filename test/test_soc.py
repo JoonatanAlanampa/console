@@ -31,7 +31,7 @@ async def setup(dut):
     cocotb.start_soon(qspi_bus(dut, flash, ram))
 
     for s in ("f_req", "f_dev", "f_addr", "d_req", "d_we", "d_dev", "d_addr",
-              "d_wdata", "m_sel", "m_we", "m_addr", "m_wdata", "pad_data"):
+              "d_wdata", "m_sel", "m_we", "m_addr", "m_wdata", "pad0_btn", "pad1_btn"):
         getattr(dut, s).value = 0
     dut.f_len.value = 1
     dut.d_len.value = 1
