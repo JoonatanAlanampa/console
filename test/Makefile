@@ -41,6 +41,13 @@ ifeq ($(BLOCK),qspi)
   VERILOG_SOURCES += $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_qspi.v
 endif
 
+ifeq ($(BLOCK),arb)
+  SIM_BUILD = sim_build/arb
+  TOPLEVEL  = tb_arb
+  COCOTB_TEST_MODULES = test_arb
+  VERILOG_SOURCES += $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_arb.v
+endif
+
 ifeq ($(BLOCK),twin)
   SIM_BUILD = sim_build/twin
   TOPLEVEL  = tb_cordic_twin
@@ -67,3 +74,4 @@ blocks:
 	$(MAKE) BLOCK=vga
 	$(MAKE) BLOCK=twin
 	$(MAKE) BLOCK=qspi
+	$(MAKE) BLOCK=arb

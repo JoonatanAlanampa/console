@@ -60,6 +60,15 @@ SUITES = {
         module="test_qspi",
         sources=lambda: [SRC / "qspi_ctrl.sv", TEST_DIR / "tb_qspi.v"],
     ),
+    "arb": dict(
+        top="tb_arb",
+        module="test_arb",
+        sources=lambda: [
+            SRC / "qspi_arbiter.sv",
+            SRC / "qspi_ctrl.sv",
+            TEST_DIR / "tb_arb.v",
+        ],
+    ),
 }
 
 

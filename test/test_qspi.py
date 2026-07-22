@@ -27,11 +27,20 @@ class SpiMem:
             38h quad write (serial cmd, quad addr, quad data)
     """
 
-    def __init__(self, size, writable):
+    def __init__(self, size, writable, page_wrap=False):
         self.mem = bytearray(size)
         self.writable = writable
+        # APS6404 PSRAM linear bursts wrap within a 1024-byte page; the arbiter
+        # must split at that boundary or a crossing burst re-reads the page top.
+        self.page_wrap = page_wrap
         self.cmds = []          # every command byte decoded, in order
         self.deselect()
+
+    def _next(self):
+        if self.page_wrap:
+            self.addr = (self.addr & ~0x3FF) | ((self.addr + 1) & 0x3FF)
+        else:
+            self.addr += 1
 
     def deselect(self):
         self.phase = "cmd"
@@ -102,7 +111,7 @@ class SpiMem:
             if self.n == 8:
                 if self.writable:
                     self.mem[self.addr % len(self.mem)] = self.sh
-                self.addr += 1
+                self._next()
                 self.sh = 0
                 self.n = 0
         elif self.phase == "wr_q":
@@ -111,7 +120,7 @@ class SpiMem:
             if self.n == 2:
                 if self.writable:
                     self.mem[self.addr % len(self.mem)] = self.sh
-                self.addr += 1
+                self._next()
                 self.sh = 0
                 self.n = 0
 
@@ -119,7 +128,7 @@ class SpiMem:
         if self.phase == "rd_s":
             if self.bit_idx == 8:
                 self.cur = self.mem[self.addr % len(self.mem)]
-                self.addr += 1
+                self._next()
                 self.bit_idx = 0
             self.out_mask = 0b0010          # SD1 (MISO)
             self.out_val = (((self.cur >> (7 - self.bit_idx)) & 1) << 1)
@@ -127,7 +136,7 @@ class SpiMem:
         elif self.phase == "rd_q":
             if self.nib_idx == 2:
                 self.cur = self.mem[self.addr % len(self.mem)]
-                self.addr += 1
+                self._next()
                 self.nib_idx = 0
             nib = (self.cur >> 4) & 0xF if self.nib_idx == 0 else self.cur & 0xF
             self.out_mask = 0b1111
