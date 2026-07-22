@@ -91,6 +91,11 @@ SUITES = {
             TEST_DIR / "tb_vengine.v",
         ],
     ),
+    "audio": dict(
+        top="tb_audio",
+        module="test_audio",
+        sources=lambda: [SRC / "audio.sv", TEST_DIR / "tb_audio.v"],
+    ),
 }
 
 
