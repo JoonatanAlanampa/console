@@ -12,7 +12,7 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import FallingEdge, RisingEdge
+from cocotb.triggers import Edge, First, RisingEdge, Timer
 
 FLASH_SIZE = 1 << 16
 RAM_SIZE = 1 << 16
@@ -139,41 +139,46 @@ class SpiMem:
 
 
 async def qspi_bus(dut, flash, ram):
-    """Pin-level glue, sampled on the falling clk edge so the DUT's rising-edge
-    NBA values have settled. SCK toggles at clk/2 → every SCK edge seen once."""
+    """Pin-level glue for the FULL-RATE controller, where sck = sck_en & ~clk is
+    a real gated clock (an edge every half system-clock). Driven off sck's own
+    edges, exactly as a physical device is: on sck rising the slave samples the
+    master's output (cmd/addr/write); on sck falling the slave launches read
+    data, which the DUT captures on its next (falling-clk) edge. It also wakes
+    on CS edges: sck stops between transactions, so the deselect that resets a
+    slave's phase only happens if the idle CS-high is observed (missing that was
+    a real bug — the next command was misread and the address drifted)."""
     prev_sck = 0
     while True:
-        await FallingEdge(dut.clk)
-        oe = dut.sd_oe.value
-        ov = dut.sd_out.value
-        sk = dut.sck.value
+        await First(Edge(dut.sck), Edge(dut.cs_flash_n), Edge(dut.cs_ram_n))
+        await Timer(1, "ps")                 # let the edge's values settle
+        s = dut.sck.value
         csf = dut.cs_flash_n.value
         csr = dut.cs_ram_n.value
-        if not (oe.is_resolvable and ov.is_resolvable and sk.is_resolvable
-                and csf.is_resolvable and csr.is_resolvable):
-            prev_sck = 0
-            dut.sd_in.value = 0xF
+        if not (s.is_resolvable and csf.is_resolvable and csr.is_resolvable):
             continue
-        oem, out, sck = int(oe), int(ov), int(sk)
-        # master nibble: driven pins as driven, released pins pulled up
-        io = 0
-        for i in range(4):
-            io |= (((out >> i) & 1) if (oem >> i) & 1 else 1) << i
         sel = flash if not int(csf) else ram if not int(csr) else None
         for d in (flash, ram):
             if d is not sel:
                 d.deselect()
-        uin = 0xF                           # idle bus: pull-ups
-        if sel is not None:
-            if sck and not prev_sck:
-                sel.on_rise(io)
-            elif prev_sck and not sck:
-                sel.on_fall()
+        if sel is None:                      # bus idle: hold pull-ups, re-arm
+            dut.sd_in.value = 0xF
+            prev_sck = 0
+            continue
+        sck = int(s)
+        if sck and not prev_sck:             # sck rising: slave samples master
+            oe = int(dut.sd_oe.value)
+            out = int(dut.sd_out.value)
+            io = 0
+            for i in range(4):
+                io |= (((out >> i) & 1) if (oe >> i) & 1 else 1) << i
+            sel.on_rise(io)
+        elif prev_sck and not sck:           # sck falling: slave drives read data
+            sel.on_fall()
             uin = 0
             for i in range(4):
                 bit = (sel.out_val >> i) & 1 if (sel.out_mask >> i) & 1 else 1
                 uin |= bit << i
-        dut.sd_in.value = uin
+            dut.sd_in.value = uin
         prev_sck = sck
 
 
@@ -297,6 +302,8 @@ async def psram_roundtrip_quad(dut):
     pulses = await do_write(dut, dev=1, addr=0x3AB0, data=payload)
     assert pulses == 16, f"one wnext per byte expected, got {pulses}"
     assert ram.cmds[-1] == 0x38, f"expected 38h, got {ram.cmds[-1]:#x}"
+    assert list(ram.mem[0x3AB0:0x3AB0 + 16]) == payload, \
+        ("WRITE stored", [hex(b) for b in ram.mem[0x3AB0:0x3AB0 + 16]])
     got = await do_read(dut, dev=1, addr=0x3AB0, length=16)
     assert got == payload, got
     assert ram.cmds[-1] == 0xEB, f"expected EBh, got {ram.cmds[-1]:#x}"
@@ -382,3 +389,18 @@ async def ascending_order(dut):
     await do_write(dut, dev=1, addr=0x0210, data=payload)
     got = await do_read(dut, dev=1, addr=0x0210, length=12)
     assert got == payload, got
+
+
+@cocotb.test()
+async def near_quantum_burst(dut):
+    """Bursts well past 16 B work — the 7-bit len the arbiter's ~96 B quantum
+    needs. 90 B stays inside a PSRAM 1 KB page (no wrap) and inside tCEM."""
+    flash, ram = await setup(dut)
+    dut.cfg.value = 0b11
+    fr = await do_read(dut, dev=0, addr=0x0100, length=64)   # flash quad, 64 B
+    assert fr == expect(flash.mem, 0x0100, 64), fr
+    payload = [(i * 3 + 1) & 0xFF for i in range(90)]         # PSRAM quad, 90 B
+    await do_write(dut, dev=1, addr=0x1000, data=payload)
+    assert list(ram.mem[0x1000:0x1000 + 90]) == payload
+    rr = await do_read(dut, dev=1, addr=0x1000, length=90)
+    assert rr == payload, rr

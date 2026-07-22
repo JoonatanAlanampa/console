@@ -20,7 +20,7 @@ module tb_qspi ();
   reg         we;
   reg         dev;
   reg  [23:0] addr;
-  reg  [4:0]  len;
+  reg  [6:0]  len;
   reg  [7:0]  wdata;
   wire        wnext;
   wire        ack;
