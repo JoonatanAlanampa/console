@@ -55,6 +55,13 @@ ifeq ($(BLOCK),vfetch)
   VERILOG_SOURCES += $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_vfetch.v
 endif
 
+ifeq ($(BLOCK),vengine)
+  SIM_BUILD = sim_build/vengine
+  TOPLEVEL  = tb_vengine
+  COCOTB_TEST_MODULES = test_vengine
+  VERILOG_SOURCES += $(SRC_DIR)/vga_engine.sv $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_vengine.v
+endif
+
 ifeq ($(BLOCK),twin)
   SIM_BUILD = sim_build/twin
   TOPLEVEL  = tb_cordic_twin
@@ -83,3 +90,4 @@ blocks:
 	$(MAKE) BLOCK=qspi
 	$(MAKE) BLOCK=arb
 	$(MAKE) BLOCK=vfetch
+	$(MAKE) BLOCK=vengine

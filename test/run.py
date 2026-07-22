@@ -79,6 +79,18 @@ SUITES = {
             TEST_DIR / "tb_vfetch.v",
         ],
     ),
+    "vengine": dict(
+        top="tb_vengine",
+        module="test_vengine",
+        sources=lambda: [
+            SRC / "vga_engine.sv",
+            SRC / "vga_fetch.sv",
+            SRC / "vga_timing.sv",
+            SRC / "qspi_arbiter.sv",
+            SRC / "qspi_ctrl.sv",
+            TEST_DIR / "tb_vengine.v",
+        ],
+    ),
 }
 
 
