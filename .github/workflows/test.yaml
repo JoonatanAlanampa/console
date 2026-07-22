@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        block: [snes, vga, twin, qspi, arb, vfetch, vengine, audio]
+        block: [snes, vga, twin, qspi, arb, vfetch, vengine, audio, soc]
     steps:
       - uses: actions/checkout@v4
 

@@ -96,6 +96,16 @@ SUITES = {
         module="test_audio",
         sources=lambda: [SRC / "audio.sv", TEST_DIR / "tb_audio.v"],
     ),
+    "soc": dict(
+        top="tb_soc",
+        module="test_soc",
+        sources=lambda: [
+            SRC / "console_soc.sv", SRC / "sysregs.sv", SRC / "vga_engine.sv",
+            SRC / "vga_fetch.sv", SRC / "vga_timing.sv", SRC / "audio.sv",
+            SRC / "snes_pad.sv", SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
+            TEST_DIR / "tb_soc.v",
+        ],
+    ),
 }
 
 

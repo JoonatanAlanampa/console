@@ -69,6 +69,13 @@ ifeq ($(BLOCK),audio)
   VERILOG_SOURCES += $(SRC_DIR)/audio.sv $(PWD)/tb_audio.v
 endif
 
+ifeq ($(BLOCK),soc)
+  SIM_BUILD = sim_build/soc
+  TOPLEVEL  = tb_soc
+  COCOTB_TEST_MODULES = test_soc
+  VERILOG_SOURCES += $(SRC_DIR)/console_soc.sv $(SRC_DIR)/sysregs.sv $(SRC_DIR)/vga_engine.sv $(SRC_DIR)/vga_fetch.sv $(SRC_DIR)/vga_timing.sv $(SRC_DIR)/audio.sv $(SRC_DIR)/snes_pad.sv $(SRC_DIR)/qspi_arbiter.sv $(SRC_DIR)/qspi_ctrl.sv $(PWD)/tb_soc.v
+endif
+
 ifeq ($(BLOCK),twin)
   SIM_BUILD = sim_build/twin
   TOPLEVEL  = tb_cordic_twin
@@ -99,3 +106,4 @@ blocks:
 	$(MAKE) BLOCK=vfetch
 	$(MAKE) BLOCK=vengine
 	$(MAKE) BLOCK=audio
+	$(MAKE) BLOCK=soc
