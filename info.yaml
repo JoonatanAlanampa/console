@@ -1,0 +1,83 @@
+# Tiny Tapeout project information
+project:
+  title:        "Console-1"      # Project title
+  author:       "Joonatan Alanampa"      # Your name
+  discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
+  description:  "Race-the-beam game console SoC: RV32E CPU + tile/sprite VGA + chiptune audio on one QSPI cartridge bus"      # One line description of what your project does
+  language:     "SystemVerilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
+  clock_hz:     25000000       # Clock frequency in Hz (or 0 if not applicable)
+
+  # How many tiles your design occupies? A single tile is about 167x108 uM.
+  # Local yosys (generic): 13790 cells / ~3168 flops, zero latches. That is
+  # 2.16x tt-riscv's cell count and 2.55x its flops; tt-riscv hardens at 4x2,
+  # so this lands at ~70-80% core density on 8x2 (6x2 would be ~90%, too tight).
+  # 8x2 is the largest standard tile — the CI utilization report is the ground
+  # truth; shrink to 6x2 only if it comes back with real headroom.
+  tiles: "8x2"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+
+  # Your top module name must start with "tt_um_". Make it unique by including your github username:
+  top_module:  "tt_um_joonatanalanampa_console"
+
+  # List your project's source files here.
+  # Source files must be in ./src and you must list each source file separately, one per line.
+  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
+  #
+  # The top module MUST be first (tt-support-tools takes sources[0] as the top
+  # file). The vendored RV32 core lives in ../vendor with its provenance intact;
+  # tt-support-tools resolves every source via os.path.join(src_dir, src) and
+  # LibreLane VERILOG_FILES via `dir::<src>`, so ../vendor/*.sv references
+  # resolve correctly without copying the files into src/.
+  source_files:
+    - "tt_um_joonatanalanampa_console.sv"
+    - "cpu_adapter.sv"
+    - "console_soc.sv"
+    - "sysregs.sv"
+    - "vga_engine.sv"
+    - "vga_fetch.sv"
+    - "vga_timing.sv"
+    - "audio.sv"
+    - "qspi_arbiter.sv"
+    - "qspi_ctrl.sv"
+    - "../vendor/rv32_core.sv"
+    - "../vendor/control.sv"
+    - "../vendor/immgen.sv"
+    - "../vendor/regfile.sv"
+    - "../vendor/alu.sv"
+    - "../vendor/branch.sv"
+    - "../vendor/uart_tx.sv"
+
+# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
+# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
+pinout:
+  # Inputs -- 8 game buttons (direct GPIO)
+  ui[0]: "BTN0"
+  ui[1]: "BTN1"
+  ui[2]: "BTN2"
+  ui[3]: "BTN3"
+  ui[4]: "BTN4"
+  ui[5]: "BTN5"
+  ui[6]: "BTN6"
+  ui[7]: "BTN7"
+
+  # Outputs -- Tiny VGA Pmod (RGB222 + syncs)
+  uo[0]: "R1"
+  uo[1]: "G1"
+  uo[2]: "B1"
+  uo[3]: "VSYNC"
+  uo[4]: "R0"
+  uo[5]: "G0"
+  uo[6]: "B0"
+  uo[7]: "HSYNC"
+
+  # Bidirectional pins -- cartridge Pmod (QSPI flash + PSRAM, audio on uio[7])
+  uio[0]: "CS0 flash"
+  uio[1]: "SD0/MOSI"
+  uio[2]: "SD1/MISO"
+  uio[3]: "SCK"
+  uio[4]: "SD2"
+  uio[5]: "SD3"
+  uio[6]: "CS1 PSRAM"
+  uio[7]: "AUDIO (sigma-delta)"
+
+# Do not change!
+yaml_version: 6

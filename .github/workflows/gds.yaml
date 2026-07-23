@@ -1,0 +1,33 @@
+name: gds
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  gds:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Build GDS
+        uses: TinyTapeout/tt-gds-action@ttsky26c
+        with:
+          pdk: sky130A
+
+  precheck:
+    needs: gds
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Run Tiny Tapeout Precheck
+        uses: TinyTapeout/tt-gds-action/precheck@ttsky26c
+
+  # gl_test and viewer are intentionally omitted for now:
+  #   * gl_test needs the standard TT test/tb.v + test.py gate-level harness;
+  #     this project's test/ is a custom per-block cocotb suite (tb_boot.v,
+  #     tb_soc.v, ...), so a GL wrapper has to be written first.
+  #   * viewer deploys the die viewer to GitHub Pages, which must be enabled on
+  #     the repo by hand first (see the tt-riscv lesson). Add once gds is green.

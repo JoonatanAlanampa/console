@@ -53,7 +53,21 @@ converts its word memory interface to the console's byte-streaming bus.
 | file | source repo | path | commit |
 |---|---|---|---|
 | `rv32_core.sv` | `tt-riscv` | `src/rv32_core.sv` | `d552e85` |
-| `control.sv` `immgen.sv` `regfile.sv` `alu.sv` `uart_tx.sv` | `tt-riscv` | `src/` | `d552e85` |
+| `control.sv` `immgen.sv` `alu.sv` `branch.sv` `uart_tx.sv` | `tt-riscv` | `src/` | `d552e85` |
+| `regfile.sv` | `tt-riscv` | `src/regfile.sv` | `d552e85` + **one edit, see below** |
 
 **Refresh check:** if the tt-riscv core changes, re-copy these and re-run
 `python test/run.py boot`.
+
+### regfile.sv — the one intentional divergence
+
+`d552e85` is a `tt-riscv` **shrink-latch-rf** WIP commit, in which `regfile.sv`
+had `` `define LATCH_RF `` hard-forced at the top so that branch would harden the
+latch variant. The console harden (2026-07-23) **removed that one `define`** so
+the file falls through to the flop variant it already contains (identical to
+tt-riscv `master`). Reason: the latch RF is a verified area win but P&R-HOSTILE
+(two tt-riscv 3x2 hardens thrashed >70 min in Build GDS — 512 gated latches
+stress CTS/routing), and the console is multi-tile so the ~10k µm² latch saving
+does not change the 8x2 budget while the flop RF is the proven-routable choice.
+This is the sole edit to any vendored file; re-add `-DLATCH_RF` only to chase
+area once a flop harden is green.

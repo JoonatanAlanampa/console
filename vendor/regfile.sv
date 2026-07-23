@@ -22,10 +22,13 @@
 // purely data-gated latch would not). Any in-cycle read of the register being
 // written is overridden by the core's bypass, so early transparency is benign.
 //
-// HARDEN-BRANCH ENABLE: the `shrink-latch-rf` branch hardens the LATCH variant,
-// so LATCH_RF is forced on here. The ifdef is local to this file; on other
-// branches the variant is selected by the build's -DLATCH_RF instead.
-`define LATCH_RF
+// CONSOLE HARDEN (2026-07-23): the forced `define LATCH_RF was REMOVED here so
+// this file defaults to the flop variant below. The latch RF is a verified area
+// win but P&R-HOSTILE (tt-riscv: two 3x2 hardens thrashed >70 min in Build GDS,
+// 512 gated latches stress CTS/routing — banked, stay on flops). The console is
+// multi-tile, so the ~10k um2 latch saving does not change the tile budget while
+// the flop RF is the proven-routable choice. Re-add -DLATCH_RF only to chase area
+// once a flop harden is green. (Vendored from tt-riscv; this is the sole edit.)
 `ifdef LATCH_RF
 module regfile #(
     parameter NREGS = 32
