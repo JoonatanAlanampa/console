@@ -23,6 +23,12 @@ MB = [dict(req=0, we=0, dev=0, addr=0, len=1, wdata=0) for _ in range(4)]
 # the largest controller transaction issued per device — for the tCEM assertion
 issued = {"flash": [], "psram": []}
 
+# longest observed cs_ram_n low interval, in clocks (40 ns each). tCEM is a hard
+# 8 us ceiling = 200 clocks; a byte-count cap only protects the RAM if the CS#
+# low time it produces actually stays under it, so measure the pin, not the math.
+CE_LOW_LIMIT = 200
+ce_low = {"max_q": 0}
+
 
 def _reset_bank():
     for m in MB:
@@ -61,6 +67,22 @@ async def issue_monitor(dut):
         prev = r
 
 
+async def ce_monitor(dut):
+    """Track the longest cs_ram_n low interval, in clocks — the physical tCEM
+    exposure. A byte cap that still lets CS# stay low past 8 us would corrupt
+    the RAM, and only a pin-level measurement (not a flat memory model) sees it."""
+    run = 0
+    while True:
+        await RisingEdge(dut.clk)
+        low = dut.cs_ram_n.value.is_resolvable and int(dut.cs_ram_n.value) == 0
+        if low:
+            run += 1
+        else:
+            if run > ce_low["max_q"]:
+                ce_low["max_q"] = run
+            run = 0
+
+
 async def setup(dut, ram_wrap=False):
     cocotb.start_soon(Clock(dut.clk, 40, "ns").start())    # 25 MHz
     flash = SpiMem(FLASH_SIZE, writable=False)
@@ -70,8 +92,10 @@ async def setup(dut, ram_wrap=False):
     cocotb.start_soon(qspi_bus(dut, flash, ram))
     cocotb.start_soon(driver(dut))
     cocotb.start_soon(issue_monitor(dut))
+    cocotb.start_soon(ce_monitor(dut))
     issued["flash"].clear()
     issued["psram"].clear()
+    ce_low["max_q"] = 0
 
     _reset_bank()
     dut.cfg.value = 0
@@ -183,8 +207,9 @@ async def video_beats_cpu(dut):
 
 @cocotb.test()
 async def tcem_chop(dut):
-    """A 96 B quad PSRAM read exceeds the 90 B tCEM cap → split; data still
-    correct AND no single controller transaction exceeds the cap."""
+    """A 96 B quad PSRAM read exceeds the 88 B tCEM cap -> split; data still
+    correct, no single controller transaction exceeds the byte cap, AND the
+    measured CS# low time stays under the 8 us (200-clock) tCEM ceiling."""
     flash, ram = await setup(dut)
     dut.cfg.value = 0b10
     payload = [(i * 9 + 5) & 0xFF for i in range(96)]
@@ -192,8 +217,12 @@ async def tcem_chop(dut):
     got, _ = await m_read(dut, IF, dev=1, addr=0x2000, length=96)
     assert got == payload, got
     assert issued["psram"], "no PSRAM transactions recorded"
-    assert max(issued["psram"]) <= 90, f"tCEM cap violated: {max(issued['psram'])}"
+    assert max(issued["psram"]) <= 88, f"tCEM byte cap violated: {max(issued['psram'])}"
     assert len(issued["psram"]) >= 4, "a 96 B write + 96 B read should be >=2 pieces each"
+    cocotb.log.info(f"tCEM: worst CS# low = {ce_low['max_q']} clocks "
+                    f"({ce_low['max_q'] * 40 / 1000:.2f} us)")
+    assert 0 < ce_low["max_q"] < CE_LOW_LIMIT, \
+        f"CS# low {ce_low['max_q']} clocks >= {CE_LOW_LIMIT} (tCEM 8 us) violated"
 
 
 @cocotb.test()
@@ -234,3 +263,7 @@ async def video_deadline_under_load(dut):
         worst = max(worst, cyc)
     stop["go"] = False
     assert worst < 800, f"video missed the scanline deadline: {worst} clocks"
+    # the CPU's back-to-back 90 B PSRAM reads (split at 88) must never hold CS#
+    # low past the tCEM ceiling, even under this sustained load
+    assert 0 < ce_low["max_q"] < CE_LOW_LIMIT, \
+        f"CS# low {ce_low['max_q']} clocks >= {CE_LOW_LIMIT} (tCEM 8 us) violated"

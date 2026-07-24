@@ -25,8 +25,8 @@
 // arbiter — a flat memory model never exercises these):
 //   * PSRAM tCEM: CS-low must stay < 8 us or refresh starves and RAM CORRUPTS.
 //     The arbiter chops a PSRAM request so no single controller transaction
-//     exceeds PSRAM_TCEM_Q bytes in quad (~90 B ≈ 8 us) or PSRAM_TCEM_S in
-//     1-bit (~20 B). Flash has no tCEM.
+//     exceeds PSRAM_TCEM_Q bytes in quad (88 B = 7.88 us) or PSRAM_TCEM_S in
+//     1-bit (20 B = 7.72 us). Flash has no tCEM.
 //   * PSRAM 1 KB page wrap: a linear PSRAM burst that crosses a 1024-byte page
 //     re-reads the page start. The arbiter splits a PSRAM request at the next
 //     1 KB boundary. Flash reads (03h/6Bh) run continuously — no split.
@@ -44,8 +44,16 @@
 
 module qspi_arbiter #(
     parameter [6:0] QUANTUM      = 7'd96,  // max bytes a master may request
-    parameter [6:0] PSRAM_TCEM_Q = 7'd90,  // quad PSRAM burst cap (tCEM 8 us)
-    parameter [6:0] PSRAM_TCEM_S = 7'd20   // 1-bit PSRAM burst cap (tCEM 8 us)
+    // A quad PSRAM burst holds CS# low for (21 + 2N) clocks at 40 ns/clk
+    // (cmd 8 + qaddr 5 + dummy 7 + data 2N + deselect 1). tCEM is a HARD 8 us
+    // (=200 clocks) ceiling — cross it and the APS6404 refresh starves and the
+    // RAM corrupts. N=90 gives 201 clocks = 8.04 us, just over; N=88 gives 197
+    // clocks = 7.88 us, inside with margin (Codex C5 — review A3's own table had
+    // already computed 8.24 us at ~96 B yet the prose called it "inside").
+    parameter [6:0] PSRAM_TCEM_Q = 7'd88,  // quad PSRAM burst cap (<= 8 us)
+    // A 1-bit PSRAM burst is (33 + 8N) clocks (cmd+addr 32 serial + data 8N +
+    // deselect 1). N=20 -> 193 clocks = 7.72 us, inside.
+    parameter [6:0] PSRAM_TCEM_S = 7'd20   // 1-bit PSRAM burst cap (<= 8 us)
 ) (
     input  logic        clk,
     input  logic        rst,

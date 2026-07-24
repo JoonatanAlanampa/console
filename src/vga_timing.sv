@@ -61,10 +61,17 @@ module vga_timing #(
   wire h_last = (hcnt == 10'(H_TOTAL - 1));
   wire v_last = (vcnt == 10'(V_TOTAL - 1));
 
+  // Reset lands the raster at the START OF VERTICAL BLANK (vcnt = V_VIS), not at
+  // the visible origin. A race-the-beam engine has no framebuffer: the pixels of
+  // logical line 0 must be fetched into a line buffer BEFORE the beam reaches
+  // visible (0,0), and that fetch is triggered at the top of vblank. Coming out
+  // of reset at (0,0) would display an unfetched line 0 for a whole frame (and
+  // that first logical line would never be fetched); coming out of reset in
+  // vblank gives the engine the full blanking interval to prepare line 0 first.
   always_ff @(posedge clk)
     if (rst) begin
       hcnt <= '0;
-      vcnt <= '0;
+      vcnt <= 10'(V_VIS);
     end else if (h_last) begin
       hcnt <= '0;
       vcnt <= v_last ? 10'd0 : vcnt + 10'd1;

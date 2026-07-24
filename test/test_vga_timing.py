@@ -39,19 +39,25 @@ def now():
 async def start(dut):
     """Reset, and return with the beam at the top of a frame.
 
-    No wait for frame_start is needed — and none is affordable: reset
-    holds both counters at zero, so releasing it IS the top of the
-    frame. Waiting for the next frame_start edge instead would burn a
-    full 16.8 ms frame (about 23 s of wall clock) before every test.
+    Reset now lands the raster at the START OF VERTICAL BLANK (vcnt =
+    V_VIS), so the video engine can fetch logical line 0 during the blank
+    before the first visible pixel. The top of the frame is only V_FRONT +
+    V_SYNC + V_BACK = 45 lines away — a few ms of sim, not the full 16.8 ms
+    frame a from-visible-origin reset would need — so advance to it via
+    frame_start and every test below still starts from a known (0,0).
     """
     cocotb.start_soon(Clock(dut.clk, CLK_NS, unit="ns").start())
     dut.rst.value = 1
     await ClockCycles(dut.clk, 5)
     dut.rst.value = 0
-    await ClockCycles(dut.clk, 1)
-    assert int(dut.x.value) == 0 and int(dut.y.value) == 0, (
-        "reset did not leave the beam at the top of the frame"
-    )
+    # Reset lands the raster at the top of vblank (vcnt = V_VIS); step forward the
+    # V_FRONT + V_SYNC + V_BACK blank lines to the top of the frame. Bulk-step
+    # most of it, then poll the last cycle or two to (0,0) -- robust to the one-
+    # cycle reset-deassert lag -- landing on a settled post-edge state so the
+    # combinational de/x/y are all consistent when read.
+    await ClockCycles(dut.clk, (V_TOTAL - V_VIS) * H_TOTAL)
+    while not (int(dut.x.value) == 0 and int(dut.y.value) == 0):
+        await ClockCycles(dut.clk, 1)
 
 
 @cocotb.test()

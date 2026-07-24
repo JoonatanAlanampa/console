@@ -116,3 +116,39 @@ async def mmio_carveout(dut):
     # a memory access still goes to QSPI, unaffected
     m = await data(dut, PSRAM_W(0x200), we=0)
     assert m == word_at(ram.mem, 0x200), hex(m)
+
+
+@cocotb.test()
+async def mmio_partial_write(dut):
+    """C2: sb/sh into an MMIO register must touch only the enabled lanes, not
+    clobber the whole 32-bit word (an sb to OAM byte 1 was replacing the entire
+    sprite entry)."""
+    flash, ram = await setup(dut)
+    await data(dut, MMIO_W(0), we=1, wdata=0x11223344, be=0xF)   # seed full word
+    # sb into lane 1 (byte enable 0b0010): only bits [15:8] change
+    await data(dut, MMIO_W(0), we=1, wdata=0x0000AA00, be=0b0010)
+    rd = await data(dut, MMIO_W(0), we=0)
+    assert rd == 0x1122AA44, hex(rd)
+    # sh into lanes 2-3 (byte enable 0b1100): only bits [31:16] change
+    await data(dut, MMIO_W(0), we=1, wdata=0xBBCC0000, be=0b1100)
+    rd = await data(dut, MMIO_W(0), we=0)
+    assert rd == 0xBBCCAA44, hex(rd)
+    # lane 0 (0b0001) alone
+    await data(dut, MMIO_W(0), we=1, wdata=0x000000EE, be=0b0001)
+    rd = await data(dut, MMIO_W(0), we=0)
+    assert rd == 0xBBCCAAEE, hex(rd)
+
+
+@cocotb.test()
+async def psram_high_mirror_rejected(dut):
+    """C3: the APS6404 has only A[22:0] (8 MiB); an access to the dev-1 high
+    mirror (offset >= 8 MiB) must be rejected, not silently aliased onto the low
+    8 MiB. Without the fix the high write lands on the same physical byte."""
+    flash, ram = await setup(dut)
+    HIGH = (1 << 22) | (0x800000 >> 2)                 # PSRAM offset 0x800000
+    await data(dut, PSRAM_W(0x0), we=1, wdata=0xCAFEF00D, be=0xF)   # low byte 0
+    await data(dut, HIGH, we=1, wdata=0xDEADBEEF, be=0xF)           # must be rejected
+    rd = await data(dut, PSRAM_W(0x0), we=0)
+    assert rd == 0xCAFEF00D, hex(rd)                   # low byte 0 untouched
+    rd2 = await data(dut, HIGH, we=0)
+    assert rd2 == 0, hex(rd2)                          # rejected read returns 0

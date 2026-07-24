@@ -78,12 +78,47 @@ def sprites_to_oam(sprites):
 
 
 @cocotb.test()
+async def render_first_frame(dut):
+    """C4 cold start: from reset, the FIRST visible pixel must be a correctly
+    fetched line 0 -- reset lands the raster in vblank so logical line 0 is
+    prefetched before the beam arrives. Previously the beam started at visible
+    (0,0) and displayed an unfetched garbage buffer for the whole first frame.
+    Check every visible pixel of physical lines 0..7 of the very first frame."""
+    flash, ram = await setup(dut)
+
+    # setup() releases reset near the top of vblank; the first visible pixel is
+    # frame 1, line 0. It MUST be (0,0) -- that is the whole point of the fix.
+    while not (dut.de.value.is_resolvable and int(dut.de.value)):
+        await RisingEdge(dut.clk)
+    assert int(dut.x.value) == 0 and int(dut.y.value) == 0, (
+        f"first visible pixel at ({int(dut.x.value)},{int(dut.y.value)}), "
+        "expected (0,0) -- reset did not land in vblank"
+    )
+
+    checks = 0
+    while int(dut.y.value) < 8:
+        if int(dut.de.value):
+            xx, yy = int(dut.x.value), int(dut.y.value)
+            exp = expected_pixel(flash, ram, xx, yy)
+            got = (int(dut.r.value), int(dut.g.value), int(dut.b.value))
+            assert got == exp, f"first-frame pixel ({xx},{yy}): got {got} exp {exp}"
+            checks += 1
+        await RisingEdge(dut.clk)
+
+    assert checks > 5000, f"too few first-frame pixels checked ({checks})"
+    cocotb.log.info(f"FIRST-FRAME: {checks} pixels verified on physical lines 0..7")
+
+
+@cocotb.test()
 async def render_steady_state(dut):
     """Check every visible pixel on screen lines 8..47 (logical lines 2..11),
     i.e. steady-state ping-pong: line L is on screen while L+1 fetches."""
     flash, ram = await setup(dut)
 
-    while not (dut.y.value.is_resolvable and int(dut.y.value) >= 8):
+    # reset lands in vblank (y >= 480); enter the first visible frame, then line 8
+    while not (dut.y.value.is_resolvable and int(dut.y.value) < 480):
+        await RisingEdge(dut.clk)
+    while int(dut.y.value) < 8:
         await RisingEdge(dut.clk)
 
     checks = 0
@@ -110,7 +145,10 @@ async def render_with_sprite(dut):
     sprites = [(1, 10, 4, 0x30)]                   # en, logical x=10, y=4, tile 0x30
     dut.oam.value = sprites_to_oam(sprites)
 
-    while not (dut.y.value.is_resolvable and int(dut.y.value) >= 16):
+    # reset lands in vblank (y >= 480); enter the first visible frame, then line 16
+    while not (dut.y.value.is_resolvable and int(dut.y.value) < 480):
+        await RisingEdge(dut.clk)
+    while int(dut.y.value) < 16:
         await RisingEdge(dut.clk)
 
     checks, overrides = 0, 0

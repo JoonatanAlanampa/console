@@ -147,7 +147,11 @@ async def soc_render_and_bus_share(dut):
 
     cocotb.start_soon(cpu())
 
-    while not (dut.soc.vy.value.is_resolvable and int(dut.soc.vy.value) >= 8):
+    # reset lands the raster in vblank (vy >= 480); enter the first visible frame,
+    # then advance to line 8
+    while not (dut.soc.vy.value.is_resolvable and int(dut.soc.vy.value) < 480):
+        await RisingEdge(dut.clk)
+    while int(dut.soc.vy.value) < 8:
         await RisingEdge(dut.clk)
 
     checks = 0

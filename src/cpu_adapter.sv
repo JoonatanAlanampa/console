@@ -8,10 +8,17 @@
 // decodes a carve-out of the data address space to the on-chip MMIO registers.
 //
 // Memory map (core byte address = {word_addr, 2'b0}, 25 bits):
-//   0x0000_0000..0x00FF_FFFF  flash (dev 0)          -- code (XIP)
-//   0x0100_0000..0x01FE_FFFF  PSRAM (dev 1)          -- data / stack
+//   0x0000_0000..0x00FF_FFFF  flash (dev 0)          -- code (XIP), W25Q128 16 MiB
+//   0x0100_0000..0x017F_FFFF  PSRAM (dev 1)          -- data / stack, APS6404 8 MiB
+//   0x0180_0000..0x01FE_FFFF  PSRAM high mirror      -- NO physical byte: rejected
 //   0x01FF_0000..0x01FF_00FF  console MMIO (sysregs) -- OAM / audio / sysctl / pads
 // (The core's own LED/UART/QSPI_CFG MMIO at 0x0001_0000 stays internal to it.)
+//
+// The APS6404 PSRAM has only A[22:0] (8 MiB), but the dev-1 window spans 24
+// internal address bits. Feeding it an offset >= 8 MiB (d_byte[23] set) would
+// drop A[23] and silently alias onto the low 8 MiB, so such accesses are
+// rejected here (acked, reads return 0, nothing reaches the bus). Flash (dev 0)
+// is a 16 MiB W25Q128 and uses the full 24-bit offset, so it is never truncated.
 //
 // Fetch and data are independent ports (separate arbiter masters), handled by
 // two independent FSMs so a fetch and a data access can be in flight together.
@@ -107,6 +114,10 @@ module cpu_adapter (
   // ------------------------------------------------------------------- data FSM
   wire [24:0] d_byte = {d_addr[22:0], 2'b0};
   wire        d_mmio = (d_byte[24:8] == 17'h1FF00);   // 0x01FF_00xx
+  // PSRAM = dev 1 (byte bit 24) that is not the MMIO carve-out; its high mirror
+  // (offset bit 23 set = >= 8 MiB) has no physical byte on the APS6404 -> reject.
+  wire        d_psram = !d_mmio && d_addr[22];
+  wire        d_oob   = d_psram && d_byte[23];
 
   // byte-enable -> first byte offset + contiguous length (for writes; reads = 4)
   logic [1:0] be_off;
@@ -127,7 +138,16 @@ module cpu_adapter (
   logic [31:0] d_buf;         // read reassembly (reads) / write source (writes)
   logic [1:0]  wsel;          // which wdata byte to send next
   assign d_rdata = d_buf;
-  assign cm_wdata = d_wdata;
+
+  // MMIO writes honour the byte enables: an sb/sh must not clobber the other
+  // lanes of a 32-bit register. sysregs is a single-cycle word store, so the
+  // merge happens here — the addressed register's current value comes back
+  // combinationally on cm_rdata (cm_addr is stable through D_MMIO), and each
+  // lane the CPU is not writing is preserved from it (read-modify-write).
+  assign cm_wdata[7:0]   = d_be[0] ? d_wdata[7:0]   : cm_rdata[7:0];
+  assign cm_wdata[15:8]  = d_be[1] ? d_wdata[15:8]  : cm_rdata[15:8];
+  assign cm_wdata[23:16] = d_be[2] ? d_wdata[23:16] : cm_rdata[23:16];
+  assign cm_wdata[31:24] = d_be[3] ? d_wdata[31:24] : cm_rdata[31:24];
 
   wire [7:0] wbyte = (wsel == 2'd0) ? d_wdata[7:0]
                    : (wsel == 2'd1) ? d_wdata[15:8]
@@ -159,6 +179,9 @@ module cpu_adapter (
               cm_we   <= d_we;
               cm_addr <= d_byte[7:2];
               d_st    <= D_MMIO;
+            end else if (d_oob) begin
+              d_buf <= 32'd0;                   // PSRAM high mirror: no such byte
+              d_ack <= 1'b1;                    // ack without touching the bus
             end else begin
               cd_req  <= 1'b1;
               cd_we   <= d_we;
