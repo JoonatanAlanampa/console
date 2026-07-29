@@ -1,11 +1,25 @@
-# ulx3s.lpf — CORDIC-1 gate-level twin on the ULX3S 85F.
-# Sites from the official ulx3s_v20 constraints, same subset the
-# TinyRV32 and cartridge harnesses use.
+# ulx3s.lpf — console prototype on the ULX3S 85F.
+#
+# Sites taken from the official emard/ulx3s doc/constraints/ulx3s_v20.lpf.
+# The gp/gn 0-3 block is byte-identical to tt-riscv/fpga/ulx3s.lpf and to the
+# cartridge bring-up bitstream, so the Cartridge Pmod sits in the SAME J1
+# position it was validated in.
+#
+# Header plan:
+#   J1 (gp/gn 0-3)   Cartridge Pmod   flash + PSRAM + audio   <- SW1 flips rows
+#   J2 (gp/gn 4-7)   Tiny VGA Pmod    RGB222 + syncs          <- SW2 flips rows
+#   gp 8/9/10        SNES controller  LATCH / CLK / DATA
+#   onboard          microSD          SPI mode
+#
+# VERIFY BEFORE FIRST POWER: check these sites against the constraint file for
+# YOUR board revision. The gp/gn 0-3 sites are proven by an earlier bitstream;
+# 4-10 are transcribed from ulx3s_v20 and have never been on hardware.
 
 LOCATE COMP "clk_25mhz" SITE "G2";
 IOBUF  PORT "clk_25mhz" PULLMODE=NONE IO_TYPE=LVCMOS33;
 FREQUENCY PORT "clk_25mhz" 25 MHZ;
 
+# btn[0] = PWR (pulled up, press = 0 = reset)
 LOCATE COMP "btn[0]" SITE "D6";
 LOCATE COMP "btn[1]" SITE "R1";
 LOCATE COMP "btn[2]" SITE "T1";
@@ -21,7 +35,7 @@ IOBUF PORT "btn[4]" PULLMODE=DOWN IO_TYPE=LVCMOS33;
 IOBUF PORT "btn[5]" PULLMODE=DOWN IO_TYPE=LVCMOS33;
 IOBUF PORT "btn[6]" PULLMODE=DOWN IO_TYPE=LVCMOS33;
 
-# SW1..SW4 = frequency code bits 0..3
+# SW1 = cartridge row mapping, SW2 = VGA row mapping (off = MAP A)
 LOCATE COMP "sw[0]" SITE "E8";
 LOCATE COMP "sw[1]" SITE "D8";
 LOCATE COMP "sw[2]" SITE "D7";
@@ -39,16 +53,23 @@ LOCATE COMP "led[4]" SITE "D1";
 LOCATE COMP "led[5]" SITE "E2";
 LOCATE COMP "led[6]" SITE "E1";
 LOCATE COMP "led[7]" SITE "H3";
-IOBUF PORT "led[0]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[1]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[2]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[3]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[4]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[5]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[6]" IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "led[7]" IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[4]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[5]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[6]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "led[7]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
 
-# J1 header: GP0 = sigma-delta sine (Audio Pmod / RC), GP1 = square sync
+LOCATE COMP "ftdi_rxd" SITE "L4";
+IOBUF  PORT "ftdi_rxd" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+
+# keep the ESP32 booted (it can power-cycle the board otherwise)
+LOCATE COMP "wifi_gpio0" SITE "L2";
+IOBUF  PORT "wifi_gpio0" PULLMODE=UP IO_TYPE=LVCMOS33;
+
+# ---- J1: Cartridge Pmod (bidirectional) ----
 LOCATE COMP "pmod_gp[0]" SITE "B11";
 LOCATE COMP "pmod_gp[1]" SITE "A10";
 LOCATE COMP "pmod_gp[2]" SITE "A9";
@@ -57,14 +78,57 @@ LOCATE COMP "pmod_gn[0]" SITE "C11";
 LOCATE COMP "pmod_gn[1]" SITE "A11";
 LOCATE COMP "pmod_gn[2]" SITE "B10";
 LOCATE COMP "pmod_gn[3]" SITE "C10";
-IOBUF PORT "pmod_gp[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gp[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gp[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gp[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gn[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gn[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gn[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pmod_gn[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gp[0]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gp[1]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gp[2]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gp[3]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gn[0]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gn[1]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gn[2]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pmod_gn[3]" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
 
-LOCATE COMP "wifi_gpio0" SITE "L2";
-IOBUF PORT "wifi_gpio0" PULLMODE=UP IO_TYPE=LVCMOS33;
+# ---- J2: Tiny VGA Pmod (outputs) ----
+LOCATE COMP "vga_gp[0]" SITE "A7";
+LOCATE COMP "vga_gp[1]" SITE "C8";
+LOCATE COMP "vga_gp[2]" SITE "C6";
+LOCATE COMP "vga_gp[3]" SITE "A6";
+LOCATE COMP "vga_gn[0]" SITE "A8";
+LOCATE COMP "vga_gn[1]" SITE "B8";
+LOCATE COMP "vga_gn[2]" SITE "C7";
+LOCATE COMP "vga_gn[3]" SITE "B6";
+IOBUF PORT "vga_gp[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gp[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gp[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gp[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gn[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gn[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gn[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IOBUF PORT "vga_gn[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+
+# ---- SNES controller on gp[8..10] ----
+# DATA gets a pull-up so an unplugged port reads all-ones, which the pad's
+# active-low convention makes "no buttons pressed" rather than "everything".
+LOCATE COMP "pad_latch" SITE "A4";
+LOCATE COMP "pad_clk"   SITE "A2";
+LOCATE COMP "pad_data"  SITE "C4";
+IOBUF PORT "pad_latch" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pad_clk"   PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "pad_data"  PULLMODE=UP   IO_TYPE=LVCMOS33;
+
+# ---- onboard microSD, SPI mode ----
+# NOTE (from ulx3s_v20.lpf): these lines are shared with wifi_gpio2/4/12/13/
+# 14/15. This design touches none of those, which is what makes sd_d usable.
+LOCATE COMP "sd_clk"  SITE "H2";
+LOCATE COMP "sd_cmd"  SITE "J1";
+LOCATE COMP "sd_d[0]" SITE "J3";
+LOCATE COMP "sd_d[1]" SITE "H1";
+LOCATE COMP "sd_d[2]" SITE "K1";
+LOCATE COMP "sd_d[3]" SITE "K2";
+LOCATE COMP "sd_cdn"  SITE "N5";
+IOBUF PORT "sd_clk"  PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "sd_cmd"  PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "sd_d[0]" PULLMODE=UP   IO_TYPE=LVCMOS33;
+IOBUF PORT "sd_d[1]" PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "sd_d[2]" PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "sd_d[3]" PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "sd_cdn"  PULLMODE=UP   IO_TYPE=LVCMOS33;

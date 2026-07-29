@@ -19,7 +19,24 @@
 
 `default_nettype none
 
-module console_soc (
+module console_soc #(
+    // WHERE THE TILE PATTERN TABLE LIVES IN FLASH.
+    //
+    // vga_engine/vga_fetch default this to 0x000000, which is fine for their
+    // own unit tests but is the CPU's BOOT VECTOR: a real cartridge has to
+    // hold executable code at flash 0 and 256 tiles x 16 bytes somewhere that
+    // is not on top of it. Overriding here keeps the block defaults untouched
+    // (so the fetch/engine suites still pin 0) while giving the SoC a layout a
+    // linker can actually target:
+    //
+    //   0x0000..0x7FFF   code + rodata            (32 KiB, enforced by link.ld)
+    //   0x8000..0x8FFF   tile patterns            (256 tiles, 2bpp, 16 B each)
+    //   0x9000..0xFFFF   .data load image + spare
+    //
+    // sw/link.ld MUST agree with this number; it is the one constant shared
+    // between the hardware and the toolchain.
+    parameter [23:0] PATTERN_BASE = 24'h008000
+) (
     input  logic        clk,
     input  logic        rst,
 
@@ -118,7 +135,7 @@ module console_soc (
   logic        vid_ack, vid_rvalid;
   logic [7:0]  m_rdata_bus;                    // shared arbiter read data
 
-  vga_engine eng (
+  vga_engine #(.PATTERN_BASE (PATTERN_BASE)) eng (
       .clk (clk), .rst (rst),
       .de (de), .x (vx), .y (vy), .frame_start (frame_start),
       .line_fetch (line_fetch), .next_y (next_y), .oam (oam),

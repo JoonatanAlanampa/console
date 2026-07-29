@@ -18,6 +18,7 @@ import mkgates
 TEST_DIR = Path(__file__).parent
 SRC = TEST_DIR.parent / "src"
 VENDOR = TEST_DIR.parent / "vendor"
+FPGA = TEST_DIR.parent / "fpga"
 BUILD = TEST_DIR / "sim_build"
 
 
@@ -36,6 +37,51 @@ def twin_sources():
 
 
 SUITES = {
+    "rehearse": dict(
+        top="tb_rehearse",
+        module="test_rehearse",
+        sources=lambda: [
+            SRC / "tt_um_joonatanalanampa_console.sv",
+            SRC / "cpu_adapter.sv", SRC / "console_soc.sv", SRC / "sysregs.sv",
+            SRC / "vga_engine.sv", SRC / "vga_fetch.sv", SRC / "vga_timing.sv",
+            SRC / "audio.sv", SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
+            VENDOR / "rv32_core.sv", VENDOR / "control.sv", VENDOR / "immgen.sv",
+            VENDOR / "regfile.sv", VENDOR / "alu.sv", VENDOR / "branch.sv",
+            VENDOR / "uart_tx.sv",
+            FPGA / "spi_master.sv", FPGA / "sd_spi.sv", FPGA / "spi_flash.sv",
+            FPGA / "sd_loader.sv",
+            TEST_DIR / "tb_rehearse.v",
+        ],
+    ),
+    "sdload": dict(
+        top="tb_sdload",
+        module="test_sdload",
+        sources=lambda: [
+            FPGA / "spi_master.sv",
+            FPGA / "sd_spi.sv",
+            FPGA / "spi_flash.sv",
+            FPGA / "sd_loader.sv",
+            TEST_DIR / "tb_sdload.v",
+        ],
+    ),
+    "spiflash": dict(
+        top="tb_spiflash",
+        module="test_spiflash",
+        sources=lambda: [
+            FPGA / "spi_master.sv",
+            FPGA / "spi_flash.sv",
+            TEST_DIR / "tb_spiflash.v",
+        ],
+    ),
+    "sdspi": dict(
+        top="tb_sdspi",
+        module="test_sdspi",
+        sources=lambda: [
+            FPGA / "spi_master.sv",
+            FPGA / "sd_spi.sv",
+            TEST_DIR / "tb_sdspi.v",
+        ],
+    ),
     "snes": dict(
         top="tb_snes",
         module="test_snes_pad",

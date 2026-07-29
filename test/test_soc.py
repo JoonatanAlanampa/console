@@ -12,7 +12,7 @@ from test_qspi import SpiMem, qspi_bus
 FLASH_SIZE = 1 << 16
 RAM_SIZE = 1 << 16
 TILEMAP_BASE = 0x010000
-PATTERN_BASE = 0x000000
+PATTERN_BASE = 0x008000
 TILES = 20
 PAL = [(0, 0, 0), (3, 0, 0), (0, 3, 0), (3, 3, 3)]
 

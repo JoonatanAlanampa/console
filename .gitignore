@@ -6,3 +6,5 @@ test/*.fst
 test/*.vcd
 # fpga
 fpga/build/
+# build artifacts (game.bin IS committed: test/test_rehearse.py loads it)
+sw/*.elf
