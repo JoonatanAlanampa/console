@@ -1,7 +1,16 @@
 name: gds
 
+# The 8x2 harden is a multi-HOUR job, so it is scoped to `main` rather than
+# running on every push to every branch (the stock template default).
+# Feature branches like the ULX3S/FPGA work change the harness, the tests and
+# the docs without touching what the ASIC flow builds at all, and each of
+# those pushes was starting a full harden that could not tell you anything.
+#
+# Run one whenever you actually want it:
+#     gh workflow run gds.yaml --ref <branch>
 on:
   push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
