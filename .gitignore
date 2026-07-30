@@ -1,6 +1,8 @@
 # simulation
 test/sim_build/
 test/__pycache__/
+# the suites import tools/sdwrite.py by path, so this appears there too
+tools/__pycache__/
 test/results*.xml
 test/*.fst
 test/*.vcd
