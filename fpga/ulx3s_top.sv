@@ -81,7 +81,10 @@ module ulx3s_top (
   wire [7:0] bus_in;                          // read back off the J1 header
   wire cart_miso = bus_in[2];                 // SD1
 
-  sd_loader #(.CLK_HZ(25_000_000)) loader (
+  // USE_CARD_DETECT stays 0: ulx3s_v20.lpf marks sd_cdn (N5) "not connected",
+  // so gating on it would mean never reading the card on this board. The pin
+  // is still wired in below so it costs nothing to flip once measured.
+  sd_loader #(.CLK_HZ(25_000_000), .USE_CARD_DETECT(1'b0)) loader (
       .clk        (clk_25mhz),
       .rst        (rst),
       .sd_cs_n    (ldr_sd_cs_n),

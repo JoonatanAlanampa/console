@@ -93,9 +93,12 @@ jobs:
           {
             echo "## Console prototype — ULX3S 85F (LFE5U-85F, CABGA381)"
             echo
-            echo "### Device utilisation"
+            echo "### Logic"
             echo '```'
-            grep -A 20 "Device utilisation" fpga/build/nextpnr.log | head -24
+            # The rows that matter are TRELLIS_COMB/TRELLIS_FF, and they sit
+            # near the END of nextpnr's utilisation table — a short -A window
+            # silently cuts off exactly the two numbers a human wants.
+            grep -E "Total LUT4s|TRELLIS_COMB|TRELLIS_FF|TRELLIS_IO|DP16KD|MULT18X18D|CCU2C" fpga/build/nextpnr.log | head -12
             echo '```'
             echo "### Timing (constraint: 25 MHz, from fpga/ulx3s.lpf)"
             echo '```'

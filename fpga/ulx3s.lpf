@@ -14,6 +14,11 @@
 # VERIFY BEFORE FIRST POWER: check these sites against the constraint file for
 # YOUR board revision. The gp/gn 0-3 sites are proven by an earlier bitstream;
 # 4-10 are transcribed from ulx3s_v20 and have never been on hardware.
+#
+# 2026-07-30: all 43 LOCATE sites below were diffed against the upstream
+# emard/ulx3s doc/constraints/ulx3s_v20.lpf and match it exactly, so the
+# TRANSCRIPTION is clean. What is still unverified is whether this board is a
+# v2.0 — that part still needs the board in hand.
 
 LOCATE COMP "clk_25mhz" SITE "G2";
 IOBUF  PORT "clk_25mhz" PULLMODE=NONE IO_TYPE=LVCMOS33;
@@ -118,6 +123,11 @@ IOBUF PORT "pad_data"  PULLMODE=UP   IO_TYPE=LVCMOS33;
 # ---- onboard microSD, SPI mode ----
 # NOTE (from ulx3s_v20.lpf): these lines are shared with wifi_gpio2/4/12/13/
 # 14/15. This design touches none of those, which is what makes sd_d usable.
+#
+# WARNING: sd_cdn (N5) is commented "not connected" in ulx3s_v20.lpf, so it is
+# located here only to pin the pull-up — the loader does NOT gate on it
+# (sd_loader's USE_CARD_DETECT defaults to 0). Trusting it would mean reading
+# "no card" forever on a board where the pin is not wired.
 LOCATE COMP "sd_clk"  SITE "H2";
 LOCATE COMP "sd_cmd"  SITE "J1";
 LOCATE COMP "sd_d[0]" SITE "J3";

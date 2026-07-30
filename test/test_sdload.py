@@ -47,7 +47,10 @@ def make_card(payload, **kw):
     return hdr + pad
 
 
-async def setup(dut, card_image, present=True, flash=None):
+async def setup(dut, card_image, present=True, flash=None, card=True):
+    """card=False models an EMPTY SLOT: no card model at all, MISO left idle
+    high by the pull-up. That is the only honest way to test the absent-card
+    path now that the loader no longer trusts the card-detect pin."""
     cocotb.start_soon(Clock(dut.clk, 40, units="ns").start())
 
     sd_pins = SimpleNamespace(cs_n=dut.sd_cs_n, sck=dut.sd_sck,
@@ -55,10 +58,13 @@ async def setup(dut, card_image, present=True, flash=None):
     fl_pins = SimpleNamespace(cs_n=dut.cart_cs_n, sck=dut.cart_sck,
                               mosi=dut.cart_mosi, miso=dut.cart_miso)
 
-    card = SdCard(sd_pins, card_image)
+    sd = SdCard(sd_pins, card_image) if card else None
     chip = flash if flash is not None else FlashChip(fl_pins, size=FLASH_SIZE)
     chip.dut = fl_pins
-    cocotb.start_soon(card.run())
+    if sd is not None:
+        cocotb.start_soon(sd.run())
+    else:
+        dut.sd_miso.value = 1          # nothing driving it but the pull-up
     cocotb.start_soon(chip.run())
 
     dut.sd_present.value = 1 if present else 0
@@ -67,7 +73,7 @@ async def setup(dut, card_image, present=True, flash=None):
         await RisingEdge(dut.clk)
     dut.rst.value = 0
     await RisingEdge(dut.clk)
-    return card, chip
+    return sd, chip
 
 
 async def wait_done(dut, timeout=4_000_000):
@@ -187,11 +193,46 @@ async def test_checksum_mismatch_leaves_no_header(dut):
 
 @cocotb.test()
 async def test_no_card_boots_what_is_already_there(dut):
-    """No card is not an error: release the bus and boot resident flash."""
-    card, chip = await setup(dut, bytes(BLOCK), present=False)
+    """No card is not an error: release the bus and boot resident flash.
+
+    The slot is genuinely empty here — no card model, MISO idle high — so this
+    exercises the real path a bare board takes: init runs, nothing ever
+    answers, the CMD0 retry budget expires, and the loader gives up cleanly.
+    The previous version of this test only lowered the card-detect flag, which
+    proved nothing about what an unanswered card actually does.
+    """
+    card, chip = await setup(dut, bytes(BLOCK), card=False)
     await wait_done(dut)
 
+    assert card is None
     assert dut.error.value == 0, "an absent card must not be an error"
     assert int(dut.status.value) == ST_NOCARD
     assert dut.owns_bus.value == 0
     assert chip.wren_count == 0, "nothing may be written with no card present"
+
+
+@cocotb.test()
+async def test_loads_with_card_detect_unwired(dut):
+    """A real card must load even when sd_cdn never goes low.
+
+    This is the regression test for a bug that would have cost a bring-up
+    session: the ULX3S v2.0 constraint file marks sd_cdn (N5) "not connected",
+    so on real hardware the pin sits pulled up and sd_present reads 0 forever.
+    The loader used to short-circuit to ST_NOCARD on exactly that, which means
+    the microSD feature would have been dead on arrival while reporting the
+    perfectly innocent status "no card". Card detect is advisory now, so a
+    present card must load regardless of the pin.
+    """
+    rnd = random.Random(20260730)
+    payload = bytes(rnd.randrange(256) for _ in range(1400))
+    card, chip = await setup(dut, make_card(payload), present=False)
+
+    await wait_done(dut)
+
+    assert dut.error.value == 0, f"status={int(dut.status.value):#04x}"
+    assert int(dut.status.value) == ST_DONE, (
+        f"status {int(dut.status.value):#04x}, expected ST_DONE — the loader "
+        "ignored a present card because card detect read low")
+    assert bytes(chip.mem[0:len(payload)]) == payload, (
+        "the image did not land in flash with card detect unwired")
+    assert bytes(chip.mem[HDR_ADDR:HDR_ADDR + 16]) == make_header(payload)

@@ -45,7 +45,17 @@
 `default_nettype none
 
 module sd_loader #(
-    parameter int CLK_HZ = 25_000_000
+    parameter int CLK_HZ = 25_000_000,
+    // Card detect is ADVISORY, and off by default. The official ULX3S v2.0
+    // constraint file marks sd_cdn (N5) "not connected" — with the pin pulled
+    // up, gating on it would make the loader conclude "no card" forever and
+    // silently never read the SD at all. That failure looks exactly like a
+    // working board with an empty slot, which is the worst kind.
+    // With this at 0 the loader just tries to initialise the card; an absent
+    // card is then detected by init failing, which is bounded by the CMD0
+    // retry budget (~8 ms at 25 MHz) and cannot hang. Set to 1 only once the
+    // pin is verified wired on your board revision.
+    parameter bit USE_CARD_DETECT = 1'b0
 ) (
     input  wire        clk,
     input  wire        rst,
@@ -55,7 +65,7 @@ module sd_loader #(
     output logic       sd_sck,
     output logic       sd_mosi,
     input  wire        sd_miso,
-    input  wire        sd_present,          // card detect, active high
+    input  wire        sd_present,          // card detect, active high (advisory — see USE_CARD_DETECT)
 
     // ---- cartridge flash (valid only while `owns_bus`) ----
     output logic       cart_cs_n,
@@ -207,7 +217,7 @@ module sd_loader #(
 
         L_RESET: begin
           status <= ST_INIT;
-          if (!sd_present) begin
+          if (USE_CARD_DETECT && !sd_present) begin
             // No card is not a failure: boot whatever is already in flash.
             status <= ST_NOCARD;
             st     <= L_DONE;
@@ -218,8 +228,13 @@ module sd_loader #(
         end
 
         L_INIT:   st <= L_INIT_W;                 // let sd_busy assert
+        // Init is the one place an SD failure is NOT an error: with card
+        // detect unusable (see USE_CARD_DETECT) a card that never answers is
+        // how an empty slot presents itself. Nothing has been written to flash
+        // yet, so this is a clean "boot what is resident". A failure AFTER
+        // init still reports ST_E_SD — that one really is a broken card.
         L_INIT_W: if (sd_err) begin
-                    status <= ST_E_SD; st <= L_ERR;
+                    status <= ST_NOCARD; st <= L_DONE;
                   end else if (sd_ready) begin
                     status  <= ST_HDR;
                     sd_blk  <= 32'd0;
