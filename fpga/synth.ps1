@@ -22,21 +22,12 @@ $env:PATH = "$oss\bin;$oss\lib;" + $env:PATH
 Set-Location (Split-Path $PSScriptRoot -Parent)
 New-Item -ItemType Directory -Force fpga\build | Out-Null
 
-# Source order: the TT top first, then the rest of the design, then the
-# harness. `../vendor` carries the read-only RV32 core, exactly as info.yaml
-# lists it for the ASIC flow.
-$src = @(
-    "src/tt_um_joonatanalanampa_console.sv",
-    "src/cpu_adapter.sv", "src/console_soc.sv", "src/sysregs.sv",
-    "src/vga_engine.sv", "src/vga_fetch.sv", "src/vga_timing.sv",
-    "src/audio.sv", "src/qspi_arbiter.sv", "src/qspi_ctrl.sv",
-    "src/snes_pad.sv",
-    "vendor/rv32_core.sv", "vendor/control.sv", "vendor/immgen.sv",
-    "vendor/regfile.sv", "vendor/alu.sv", "vendor/branch.sv",
-    "vendor/uart_tx.sv",
-    "fpga/spi_master.sv", "fpga/sd_spi.sv", "fpga/spi_flash.sv",
-    "fpga/sd_loader.sv", "fpga/ulx3s_top.sv"
-) -join " "
+# The source list lives in fpga/sources.txt so that this script and the CI
+# workflow build the SAME design — see the header of that file.
+$src = (Get-Content fpga\sources.txt |
+        Where-Object { $_ -notmatch '^\s*#' -and $_.Trim() -ne "" } |
+        ForEach-Object { $_.Trim() }) -join " "
+if (-not $src) { throw "fpga\sources.txt listed no sources" }
 
 yosys -q -p "read_verilog -sv -I src $src; synth_ecp5 -top ulx3s_top -json fpga/build/console.json"
 if ($LASTEXITCODE -ne 0) { throw "yosys failed" }

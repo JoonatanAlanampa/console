@@ -10,7 +10,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        block: [snes, vga, twin, qspi, arb, vfetch, vengine, audio, soc, cpuadapt, boot]
+        # Keep this list in sync with SUITES in test/run.py — a suite that
+        # exists there but not here passes forever on the developer's machine
+        # and is never checked by anyone else.
+        #   chip blocks:
+        block: [snes, vga, twin, qspi, arb, vfetch, vengine, audio, soc, cpuadapt, boot,
+        #   ULX3S harness blocks (no silicon pin exists for these):
+                sdspi, spiflash, sdload,
+        #   full chain: real sw/game.bin -> card image -> loader -> flash -> XIP boot
+                rehearse]
     steps:
       - uses: actions/checkout@v4
 

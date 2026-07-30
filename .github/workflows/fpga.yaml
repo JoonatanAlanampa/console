@@ -1,0 +1,124 @@
+name: fpga
+
+# Builds the ULX3S 85F prototype bitstream: yosys -> nextpnr-ecp5 -> ecppack.
+#
+# This lives in CI rather than on the developer's PC on purpose: the 85F
+# place-and-route is the slow step by a wide margin, and local heavy compute is
+# off-limits on this project. `fpga/synth.ps1 -SynthOnly` is the local
+# equivalent for a fast RTL check; it stops after yosys.
+#
+# The toolchain is PINNED to the same oss-cad-suite release installed on the
+# development machine, so a CI cell count that disagrees with the local one
+# means the DESIGN changed, not the tools.
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'vendor/**'
+      - 'fpga/**'
+      - '.github/workflows/fpga.yaml'
+  workflow_dispatch:
+
+env:
+  OSS_TAG: '2026-07-17'
+  OSS_TARBALL: 'oss-cad-suite-linux-x64-20260717.tgz'
+
+jobs:
+  bitstream:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cache oss-cad-suite
+        id: cache-oss
+        uses: actions/cache@v4
+        with:
+          path: ~/oss-cad-suite
+          key: oss-cad-suite-${{ env.OSS_TAG }}
+
+      - name: install oss-cad-suite
+        if: steps.cache-oss.outputs.cache-hit != 'true'
+        run: |
+          url="https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${OSS_TAG}/${OSS_TARBALL}"
+          echo "downloading $url"
+          curl -fL --retry 3 -o /tmp/oss-cad-suite.tgz "$url"
+          tar -xzf /tmp/oss-cad-suite.tgz -C "$HOME"
+          test -x "$HOME/oss-cad-suite/bin/nextpnr-ecp5"
+
+      - name: put oss-cad-suite on PATH
+        run: echo "$HOME/oss-cad-suite/bin" >> "$GITHUB_PATH"
+
+      - name: tool versions
+        run: |
+          yosys -V
+          nextpnr-ecp5 --version
+
+      # Source list comes from fpga/sources.txt — the same file synth.ps1
+      # reads, so the two builders cannot drift apart.
+      - name: synthesis (yosys)
+        run: |
+          mkdir -p fpga/build
+          src=$(grep -vE '^[[:space:]]*(#|$)' fpga/sources.txt | tr '\n' ' ')
+          echo "sources: $src"
+          yosys -l fpga/build/yosys.log \
+            -p "read_verilog -sv -I src $src; synth_ecp5 -top ulx3s_top -json fpga/build/console.json"
+
+      # nextpnr fails by design when the 25 MHz constraint in fpga/ulx3s.lpf is
+      # not met. Capture its exit code instead of letting the step die, so the
+      # achieved Fmax still reaches the summary and the artifact on a red run —
+      # "how far off were we" is the whole point of the number.
+      - name: place and route (nextpnr-ecp5)
+        id: pnr
+        run: |
+          set +e
+          set -o pipefail
+          nextpnr-ecp5 --85k --package CABGA381 \
+            --json fpga/build/console.json \
+            --lpf fpga/ulx3s.lpf \
+            --textcfg fpga/build/console.config 2>&1 | tee fpga/build/nextpnr.log
+          echo "rc=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: pack bitstream (ecppack)
+        if: steps.pnr.outputs.rc == '0'
+        run: |
+          ecppack fpga/build/console.config fpga/build/console.bit
+          ls -l fpga/build/console.bit
+
+      - name: report
+        if: always()
+        run: |
+          set +e
+          {
+            echo "## Console prototype — ULX3S 85F (LFE5U-85F, CABGA381)"
+            echo
+            echo "### Device utilisation"
+            echo '```'
+            grep -A 20 "Device utilisation" fpga/build/nextpnr.log | head -24
+            echo '```'
+            echo "### Timing (constraint: 25 MHz, from fpga/ulx3s.lpf)"
+            echo '```'
+            grep -E "Max frequency for clock|Max delay|Info: Critical path" fpga/build/nextpnr.log | head -20
+            echo '```'
+            if [ "${{ steps.pnr.outputs.rc }}" != "0" ]; then
+              echo "**nextpnr exited ${{ steps.pnr.outputs.rc }}** — see the full log in the artifact."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: console-fpga
+          path: |
+            fpga/build/console.bit
+            fpga/build/yosys.log
+            fpga/build/nextpnr.log
+          if-no-files-found: warn
+
+      - name: gate on place-and-route result
+        run: |
+          if [ "${{ steps.pnr.outputs.rc }}" != "0" ]; then
+            echo "::error::nextpnr-ecp5 exited ${{ steps.pnr.outputs.rc }}. If this is a timing violation, the achieved Fmax is in the job summary and in fpga/build/nextpnr.log in the console-fpga artifact."
+            exit 1
+          fi
