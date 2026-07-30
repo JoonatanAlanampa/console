@@ -14,7 +14,9 @@
 #   * a corrupt image must be REJECTED and must not leave a header behind, or
 #     the next boot would trust a half-written game.
 
+import importlib.util
 import random
+from pathlib import Path
 from types import SimpleNamespace
 
 import cocotb
@@ -23,6 +25,12 @@ from cocotb.triggers import RisingEdge
 
 from test_sdspi import SdCard
 from test_spiflash import FlashChip
+
+# The shipped card writer, imported by path (tools/ is not a package).
+_SDWRITE_PY = Path(__file__).parent.parent / "tools" / "sdwrite.py"
+_spec = importlib.util.spec_from_file_location("sdwrite", _SDWRITE_PY)
+sdwrite = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(sdwrite)
 
 BLOCK = 512
 HDR_ADDR = 0xFFF000
@@ -84,6 +92,25 @@ async def wait_done(dut, timeout=4_000_000):
             await RisingEdge(dut.clk)
             return
     raise AssertionError("loader never asserted done")
+
+
+@cocotb.test()
+async def test_writer_matches_the_format_under_test(dut):
+    """tools/sdwrite.py must lay out a card exactly as these tests assume.
+
+    sdwrite.py is the ONLY thing that ever writes a physical card, and it
+    carries its own copy of the layout (its docstring even says "mirrored
+    here"). Nothing else compares the two, so if they drift, all of these
+    tests keep passing against a format no real card is ever written in.
+    Edge cases matter more than the happy path: empty, one byte short of a
+    block, exactly a block, one byte over.
+    """
+    rnd = random.Random(20260730)
+    for n in (0, 1, 511, 512, 513, 1500, 4096):
+        payload = bytes(rnd.randrange(256) for _ in range(n))
+        assert sdwrite.build_image(payload) == make_card(payload), (
+            f"tools/sdwrite.py and the test helper disagree at payload {n} B "
+            "- a real card would not match what the gateware was tested on")
 
 
 @cocotb.test()

@@ -12,6 +12,7 @@
 # (Deliberately ASCII-only: this file gets rewritten by tooling often enough
 # that a stray cp1252 round-trip has already corrupted it once.)
 
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,7 +21,17 @@ from cocotb.clock import Clock
 from cocotb.triggers import Edge, RisingEdge
 
 from test_sdspi import SdCard
-from test_sdload import make_card, make_header
+
+# Build the card image with the REAL host-side writer, not a test-local copy of
+# the format. tools/sdwrite.py is the only thing that ever writes a physical
+# card, so if it and the gateware disagree the whole suite can pass while the
+# actual hardware reads garbage. Importing it by path (tools/ is not a package,
+# and sdwrite.py is a CLI script guarded by __main__) makes this rehearsal
+# start where the user starts.
+_SDWRITE_PY = Path(__file__).parent.parent / "tools" / "sdwrite.py"
+_spec = importlib.util.spec_from_file_location("sdwrite", _SDWRITE_PY)
+sdwrite = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(sdwrite)
 
 GAME = Path(__file__).parent.parent / "sw" / "game.bin"
 
@@ -171,12 +182,13 @@ async def test_card_to_running_game(dut):
     """A real game.bin on a card ends up executing on the console."""
     assert GAME.exists(), "sw/game.bin not built - run `python sw/build.py`"
     payload = GAME.read_bytes()
+    image = sdwrite.build_image(payload)
 
     cocotb.start_soon(Clock(dut.clk, 40, unit="ns").start())
 
     sd_pins = SimpleNamespace(cs_n=dut.ldr_sd_cs_n, sck=dut.ldr_sd_sck,
                               mosi=dut.ldr_sd_mosi, miso=dut.sd_miso)
-    card = SdCard(sd_pins, make_card(payload))
+    card = SdCard(sd_pins, image)
     cart = CartBus(dut)
     cocotb.start_soon(card.run())
     cocotb.start_soon(cart.run())
@@ -200,7 +212,9 @@ async def test_card_to_running_game(dut):
         "loader error, status=0x%02x" % int(dut.ldr_status.value))
     assert bytes(cart.flash[0:len(payload)]) == payload, (
         "the cartridge flash does not match sw/game.bin")
-    assert bytes(cart.flash[0xFFF000:0xFFF010]) == make_header(payload)
+    # The resident header must be byte-identical to the one sdwrite.py put in
+    # block 0 - that is what makes the next boot's skip-compare trustworthy.
+    assert bytes(cart.flash[0xFFF000:0xFFF010]) == image[0:16]
 
     # ---- phase 2: the SoC boots out of that flash and runs the game ----
     # draw_map() is the first thing main() does, so the tile map appearing in

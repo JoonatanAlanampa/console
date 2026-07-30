@@ -67,10 +67,17 @@ The board plays a 440 Hz tone out of a design made of our own gates.
 ```
 src/        console RTL
 test/       cocotb suites + run.py (no make required) + Makefile
-fpga/       ULX3S harness for the gate-level twin
+fpga/       ULX3S prototype harness: microSD loader, LPF, bitstream build
+fpga/cordic-twin/   the older ULX3S harness for the gate-level CORDIC twin
+sw/         game toolchain (crt0, linker script, build.py) + demo game
+tools/      sdwrite.py — writes a game onto a raw microSD card
 vendor/     read-only copies from other repos, with provenance
 docs/       specifications
 ```
+
+**Bringing up real hardware: [fpga/README.md](fpga/README.md)** — the ordered
+first-power-up checklist, the loader's LED status codes, and an explicit list
+of what is proven in simulation versus what still needs the board.
 
 `vendor/` is never edited here — see [vendor/README.md](vendor/README.md)
 for what each file is, where it came from, and which commit.
