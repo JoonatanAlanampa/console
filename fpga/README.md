@@ -96,11 +96,29 @@ Only now add video, on **J2 = gp/gn 4-7** — sites that have never been on
 hardware. **SW2** flips the VGA row mapping the same way SW1 does for the
 cartridge.
 
-## 6. SNES controller
+## 6. TT Gamepad Pmod
 
-`gp[8]`/`gp[9]`/`gp[10]` = LATCH / CLK / DATA. Note the decoder lives in the
-**harness**, not in the chip: the TT `ui` pins are input-only, so the silicon
-takes 8 decoded buttons and cannot run the SNES protocol itself.
+The Pmod goes on the **gp/gn[8..10]** block. All three signals (latch, clock,
+data) are **inputs** — the Pmod's CH32V003 is the master. That is not a
+convenience: `ui` is input-only on the chip, so a controller the chip must
+clock itself can never work, and this Pmod is the only path that reaches
+silicon. The decoder therefore lives in the **harness**, and the chip takes 8
+already-decoded buttons.
+
+- **SW3** flips the gamepad row mapping, same as SW1/SW2. Try it before
+  suspecting the Pmod.
+- **SW4 is the bring-up aid**: it puts `btn1[7:0]` straight on the LEDs.
+  Press B, watch LED0. With a black-box Pmod and no cable to meter, this is
+  the cheapest proof the controller path works end to end — do it before
+  trusting a game to it.
+- An unplugged port reports all 1s, which the receiver decodes as **not
+  present, zero buttons**. If LEDs light up with nothing connected, that is
+  wrong and worth stopping for.
+
+Note the Pmod was **out of stock** when this was written, so none of it has
+met its hardware. The protocol is matched against the designer's own
+reference receiver (`vendor/gamepad_pmod.v`), which is the strongest check
+available short of the real thing.
 
 ## Loader status codes (LED value)
 

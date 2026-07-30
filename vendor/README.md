@@ -14,6 +14,31 @@ to** from this repository.
 | `tt-cordic-rtl/project.sv` | `tt-cordic` | `src/project.sv` | `b646d05` (2026-07-19, the fabricated revision) |
 | `tt-cordic-rtl/cordic.sv` | `tt-cordic` | `src/cordic.sv` | `b646d05` |
 | `own_cells_beh.v` | — | written here | see below |
+| `gamepad_pmod.v` | `psychogenic/gamepad-pmod` | `verilog/gamepad_pmod.v` | `9b1408b` (2025-11-13) |
+
+## gamepad_pmod.v
+
+The Gamepad Pmod designer's own reference receiver (Pat Deegan,
+Apache-2.0), used verbatim rather than reimplemented: it is the code the
+Pmod's firmware was developed against, so matching it is the closest thing
+to hardware validation available while the Pmod is out of stock.
+
+Used by the ULX3S harness through `fpga/gamepad_ulx3s.sv`, which only
+repacks the outputs into the bit order the harness already used. It is NOT
+part of the chip — `tt_um_joonatanalanampa_console` takes eight already
+decoded buttons on `ui`, because `ui` is input-only and cannot drive the
+latch/clock a controller needs.
+
+Three protocol facts were read out of this file rather than guessed, and
+each is pinned by a test in `test/test_gamepad.py`: data is sampled on the
+RISING edge of `pmod_clk`; `pmod_latch` TERMINATES a frame (its rising edge
+commits); and in a 24-bit dual frame **controller 2 is transmitted first**
+(`decoder1` reads `data_reg[11:0]`, the last twelve bits shifted in).
+
+**Refresh check:** re-copy and re-run `python test/run.py gamepad` if
+upstream changes. Note the reference commits whatever is in the shift
+register on latch without validating the frame width; that behaviour is
+inherited on purpose.
 
 ## cordic_gates.v
 

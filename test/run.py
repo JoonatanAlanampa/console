@@ -87,6 +87,15 @@ SUITES = {
         module="test_snes_pad",
         sources=lambda: [SRC / "snes_pad.sv", TEST_DIR / "tb_snes.v"],
     ),
+    "gamepad": dict(
+        top="tb_gamepad",
+        module="test_gamepad",
+        sources=lambda: [
+            VENDOR / "gamepad_pmod.v",
+            FPGA / "gamepad_ulx3s.sv",
+            TEST_DIR / "tb_gamepad.v",
+        ],
+    ),
     "vga": dict(
         top="tb_vga",
         module="test_vga_timing",

@@ -12,10 +12,14 @@
 //    input-only), so `sd_loader` copies the game into the cartridge flash
 //    while the SoC is held in reset and then hands the bus over. The SoC boots
 //    by XIP from flash address 0 exactly as silicon will.
-//  * SNES decoding. The protocol needs LATCH and CLK as OUTPUTS and the chip's
-//    `ui` pins are inputs only — which is why `info.yaml` maps ui to eight
-//    plain buttons and why the TT Gamepad Pmod is master-side. Here the
-//    harness runs `snes_pad` and presents eight decoded buttons to `ui_in`.
+//  * Controller decoding. A raw SNES pad needs LATCH and CLK as OUTPUTS and
+//    the chip's `ui` pins are inputs only — which is why `info.yaml` maps ui
+//    to eight plain buttons and why the TT Gamepad Pmod is master-side: it
+//    drives all three wires and the chip only samples, so it is the sole
+//    controller path that can exist on silicon. The harness runs
+//    `gamepad_ulx3s` (over the vendored reference receiver) and presents eight
+//    decoded buttons to `ui_in`. `src/snes_pad.sv` is no longer instantiated
+//    but is kept: it is verified, and it documents the raw pad protocol.
 //    Consequence: A, X, L and R are not reachable through an 8-bit input
 //    budget. ui_in carries B, Y, Select, Start, Up, Down, Left, Right.
 //
@@ -50,10 +54,11 @@ module ulx3s_top (
     output logic [3:0] vga_gp,
     output logic [3:0] vga_gn,
 
-    // SNES controller (3 signals + the header's 3V3/GND)
-    output logic       pad_latch,
-    output logic       pad_clk,
-    input  wire        pad_data,
+    // TT Gamepad Pmod block on gp/gn[8..10]. All three signals are INPUTS:
+    // the Pmod's CH32V003 is the master and drives latch, clock and data.
+    // SW3 picks which physical row carries them, exactly as SW1/SW2 do.
+    input  wire [2:0]  pad_gp,
+    input  wire [2:0]  pad_gn,
 
     // onboard microSD, in SPI mode
     output logic       sd_clk,
@@ -112,20 +117,24 @@ module ulx3s_top (
   assign sd_d[0] = 1'bz;                      // MISO, driven by the card
 
   // ------------------------------------------------------- SNES controller
-  wire [11:0] pad_btn;
+  wire [11:0] pad_btn, pad_btn2;
 
-  snes_pad #(
-      .NPADS  (1),
-      .CLK_HZ (25_000_000),
-      .POLL_HZ(60)
-  ) pad (
-      .clk      (clk_25mhz),
-      .rst      (rst),
-      .pad_latch(pad_latch),
-      .pad_clk  (pad_clk),
-      .pad_data (pad_data),
-      .btn      (pad_btn),
-      .strobe   ()
+  // SW3 = gamepad row mapping, same ambiguity and same remedy as SW1/SW2.
+  wire pad_map_b   = sw[2];
+  wire pmod_latch  = pad_map_b ? pad_gp[0] : pad_gn[0];
+  wire pmod_clk    = pad_map_b ? pad_gp[1] : pad_gn[1];
+  wire pmod_data   = pad_map_b ? pad_gp[2] : pad_gn[2];
+
+  gamepad_ulx3s pad (
+      .clk        (clk_25mhz),
+      .rst        (rst),
+      .pmod_latch (pmod_latch),
+      .pmod_clk   (pmod_clk),
+      .pmod_data  (pmod_data),
+      .btn1       (pad_btn),
+      .btn2       (pad_btn2),
+      .present1   (),
+      .present2   ()
   );
 
   // B, Y, Select, Start, Up, Down, Left, Right — the low 8 of the pad's 12.
@@ -195,8 +204,12 @@ module ulx3s_top (
   end
 
   always_comb begin
-    if (ldr_err || !ldr_done) led = ldr_status;   // loader diagnostics
-    else                      led = frames;       // blinking = video is alive
+    // SW4 = gamepad bring-up aid. The Pmod is a black box with no cable to
+    // meter, so "press B, watch LED0" is the only cheap way to prove the
+    // controller path end to end before trusting it in a game.
+    if (sw[3])                     led = pad_btn[7:0];
+    else if (ldr_err || !ldr_done) led = ldr_status;   // loader diagnostics
+    else                           led = frames;       // blinking = video alive
   end
 
 endmodule

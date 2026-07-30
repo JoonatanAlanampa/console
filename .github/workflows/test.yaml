@@ -16,7 +16,7 @@ jobs:
         #   chip blocks:
         block: [snes, vga, twin, qspi, arb, vfetch, vengine, audio, soc, cpuadapt, boot,
         #   ULX3S harness blocks (no silicon pin exists for these):
-                sdspi, spiflash, sdload,
+                sdspi, spiflash, sdload, gamepad,
         #   full chain: real sw/game.bin -> card image -> loader -> flash -> XIP boot
                 rehearse]
     steps:

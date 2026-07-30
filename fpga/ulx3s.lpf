@@ -110,15 +110,34 @@ IOBUF PORT "vga_gn[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
 IOBUF PORT "vga_gn[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
 IOBUF PORT "vga_gn[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
 
-# ---- SNES controller on gp[8..10] ----
-# DATA gets a pull-up so an unplugged port reads all-ones, which the pad's
-# active-low convention makes "no buttons pressed" rather than "everything".
-LOCATE COMP "pad_latch" SITE "A4";
-LOCATE COMP "pad_clk"   SITE "A2";
-LOCATE COMP "pad_data"  SITE "C4";
-IOBUF PORT "pad_latch" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pad_clk"   PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
-IOBUF PORT "pad_data"  PULLMODE=UP   IO_TYPE=LVCMOS33;
+# ---- TT Gamepad Pmod block on gp/gn[8..10] ----
+# All three signals are INPUTS: the Pmod's CH32V003 is the master and drives
+# latch, clock and data. (This is why the Pmod is the only controller path
+# that can ever reach silicon - the chip's ui pins cannot drive anything.)
+#
+# The 12-pin Pmod block puts IO5/IO6/IO7 on pins 7/8/9, i.e. the second row's
+# first three signals. Which physical row is gp and which is gn depends on
+# how the block is seated, so SW3 selects at runtime rather than needing a
+# re-flash - the same remedy already used for the cartridge (SW1) and VGA (SW2).
+#
+# PULLMODE=UP on all three: with no Pmod plugged in the lines idle high, no
+# frame is ever clocked, and the receiver's all-ones rule reports "not
+# present" with zero buttons. Silence degrades to "nothing pressed".
+#
+# gp/gn[11] are deliberately NOT constrained - they are shared with
+# wifi_gpio25/26, and nothing here needs a fourth signal.
+LOCATE COMP "pad_gp[0]" SITE "A4";
+LOCATE COMP "pad_gp[1]" SITE "A2";
+LOCATE COMP "pad_gp[2]" SITE "C4";
+LOCATE COMP "pad_gn[0]" SITE "A5";
+LOCATE COMP "pad_gn[1]" SITE "B1";
+LOCATE COMP "pad_gn[2]" SITE "B4";
+IOBUF PORT "pad_gp[0]" PULLMODE=UP IO_TYPE=LVCMOS33;
+IOBUF PORT "pad_gp[1]" PULLMODE=UP IO_TYPE=LVCMOS33;
+IOBUF PORT "pad_gp[2]" PULLMODE=UP IO_TYPE=LVCMOS33;
+IOBUF PORT "pad_gn[0]" PULLMODE=UP IO_TYPE=LVCMOS33;
+IOBUF PORT "pad_gn[1]" PULLMODE=UP IO_TYPE=LVCMOS33;
+IOBUF PORT "pad_gn[2]" PULLMODE=UP IO_TYPE=LVCMOS33;
 
 # ---- onboard microSD, SPI mode ----
 # NOTE (from ulx3s_v20.lpf): these lines are shared with wifi_gpio2/4/12/13/

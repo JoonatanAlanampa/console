@@ -20,7 +20,8 @@ wait.
 | chiptune synth voices | designed as chip-#3 candidate, not built | CLAUDE.md |
 | own cell library | 16 cells, DRC/LVS clean, hardening converging | `stdcells` (other session) |
 | CORDIC-1 on own cells | gate netlist exists, now **executes** — see phase 0 | here |
-| SNES pad reader | **done, verified** | `src/snes_pad.sv` |
+| SNES pad reader | done, verified — but **not instantiated** (see Pinout notes) | `src/snes_pad.sv` |
+| Gamepad Pmod receiver | **done, verified**, 8 tests | `fpga/gamepad_ulx3s.sv` + `vendor/gamepad_pmod.v` |
 | video timing + fetch hooks | **done, verified** | `src/vga_timing.sv` |
 | memory arbiter | spec drafted, review pending | `docs/qspi-arbiter-spec.md` |
 
@@ -79,11 +80,15 @@ ULX3S prototype plays a game.
 
 ## Pinout notes
 
-**SNES pads cost N+2 pins, not 3 for two pads.** LATCH and CLK are
-shared by every controller — that is how the original console wires its
-two ports — so one pad is 3 pins and two pads are 4. The earlier
-planning line ("2 pads, 3 ui pins") was counting one pad's worth. The
-budget still fits: 4 of the 8 `ui` pins.
+**~~SNES pads cost N+2 pins, not 3 for two pads.~~ SUPERSEDED — the whole
+calculation was moot.** It counted `ui` pins for LATCH and CLK, which a raw
+pad needs as **OUTPUTS**. `ui` is input-only, every `uo` is VGA and every
+`uio` is cartridge, so no output pin exists and a bare pad can never be read
+by the chip at any pin cost. The controller path is the **TT Gamepad Pmod**,
+whose CH32V003 is the master and drives all three wires; the chip only
+samples 8 already-decoded buttons on `ui[0..7]`. Decoding lives in the ULX3S
+harness (`fpga/gamepad_ulx3s.sv`); `src/snes_pad.sv` is no longer
+instantiated.
 
 **Video takes all 8 `uo` pins** (Tiny VGA Pmod) and the cartridge takes
 all 8 `uio`, which is exactly why the cartridge Pmod puts the audio

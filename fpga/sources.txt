@@ -35,7 +35,11 @@ vendor/alu.sv
 vendor/branch.sv
 vendor/uart_tx.sv
 
+# ---- vendored, read-only: the Gamepad Pmod designer's reference receiver ----
+vendor/gamepad_pmod.v
+
 # ---- harness only: no silicon pin exists for any of this ----
+fpga/gamepad_ulx3s.sv
 fpga/spi_master.sv
 fpga/sd_spi.sv
 fpga/spi_flash.sv

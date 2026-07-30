@@ -1,7 +1,7 @@
 # console
 
 A game console SoC, built as far as possible out of self-designed parts:
-an RV32 CPU, race-the-beam video, chiptune audio, two SNES controllers
+an RV32 CPU, race-the-beam video, chiptune audio, gamepad input
 and a custom cartridge board — with the long-term goal of hardening it on
 a standard-cell library designed from device physics up, in this same
 workspace.
@@ -14,6 +14,7 @@ the constraints that shape the design are in [PLAN.md](PLAN.md).
 ```
 python test/run.py          # all three suites, ~22 s
 python test/run.py snes     # SNES pad controller        5 tests
+python test/run.py gamepad  # TT Gamepad Pmod receiver   8 tests
 python test/run.py vga      # VGA race-the-beam timing   6 tests
 python test/run.py twin     # CORDIC-1 RTL vs own-cell netlist   5 tests
 ```
@@ -49,6 +50,11 @@ The board plays a 440 Hz tone out of a design made of our own gates.
 - `src/snes_pad.sv` — N controllers on the shared LATCH/CLK bus, timing
   derived from `CLK_HZ`, one sample per video frame. Verified against a
   behavioural model of the pad's 4021-style shift register.
+  **No longer instantiated:** a raw pad needs LATCH and CLK as *outputs*,
+  which the chip's input-only `ui` pins cannot provide, so the controller
+  path is now the TT Gamepad Pmod (`fpga/gamepad_ulx3s.sv` over the vendored
+  reference receiver). The file is kept because it is verified and it
+  documents the raw protocol.
 - `src/vga_timing.sv` — 640×480@60, plus the hooks a framebuffer-less
   console needs: `line_fetch`/`next_y` (what to fetch and when),
   `pre_line` (early warning), `frame_start`.
