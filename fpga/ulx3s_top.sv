@@ -54,6 +54,11 @@ module ulx3s_top (
     output logic [3:0] vga_gp,
     output logic [3:0] vga_gn,
 
+    // Onboard 3.5 mm jack (4-bit R2R ladder per channel). This carries the
+    // SAME audio as the cartridge Pmod's amp+jack — it does not replace it.
+    output logic [3:0] audio_l,
+    output logic [3:0] audio_r,
+
     // TT Gamepad Pmod block on gp/gn[8..10]. All three signals are INPUTS:
     // the Pmod's CH32V003 is the master and drives latch, clock and data.
     // SW3 picks which physical row carries them, exactly as SW1/SW2 do.
@@ -164,6 +169,22 @@ module ulx3s_top (
 
   wire [7:0] bus_out = ldr_owns ? ld_out : uio_out;
   wire [7:0] bus_oe  = ldr_owns ? ld_oe  : uio_oe;
+
+  // ------------------------------------------------------- audio, both jacks
+  // The console has ONE audio source: the sigma-delta bit on uio[7]. It goes
+  // to the cartridge Pmod (which carries the real RC filter, amp and jack —
+  // the path the silicon will use) AND, in parallel, to the ULX3S's own 3.5 mm
+  // jack. Tapping `bus_out[7]` rather than `uio_out[7]` means both jacks carry
+  // the identical waveform and both go silent while the loader owns the bus.
+  //
+  // The onboard jack is a 4-bit R2R ladder per channel; driving all four bits
+  // from the one-bit stream gives full-scale output and lets the speakers do
+  // the low-pass filtering, exactly as the Pmod's RC network does. If it is
+  // too hot, drive fewer of the low bits to attenuate. Mono source, so both
+  // channels get the same signal.
+  wire audio_bit = bus_out[7];
+  assign audio_l = {4{audio_bit}};
+  assign audio_r = {4{audio_bit}};
 
   // Header permutation, orientation-selectable (see the note at the top).
   //   mapping A: gp[n] = uio[3-n], gn[n] = uio[7-n]; mapping B swaps the rows.

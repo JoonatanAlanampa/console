@@ -42,11 +42,23 @@ ones nothing has validated.
 
 ## 2. Power the board alone — no Pmods
 
-Flash the bitstream with nothing plugged into J1 or J2:
+Load the bitstream with nothing plugged into J1 or J2:
 
 ```
-openFPGALoader -b ulx3s fpga/build/console.bit
+openFPGALoader -b ulx3s fpga/build/console.bit        # SRAM, volatile
 ```
+
+**This one is gone at power-off.** It configures the FPGA directly and is what
+you want while iterating. For a console you can simply switch on — no PC
+attached — write it to the board's SPI configuration flash instead:
+
+```
+openFPGALoader -b ulx3s -f fpga/build/console.bit     # persistent
+```
+
+Do the volatile load first and get through this checklist with it; commit to
+flash once the board behaves. A bad image in config flash is recoverable
+(reflash it), but it boots on every power-up until you do.
 
 Expected: the LEDs show a **loader status code** (see the table below), and
 with no card inserted it should settle at **0x82 (`ST_NOCARD`)** and then the
@@ -119,6 +131,24 @@ Note the Pmod was **out of stock** when this was written, so none of it has
 met its hardware. The protocol is matched against the designer's own
 reference receiver (`vendor/gamepad_pmod.v`), which is the strongest check
 available short of the real thing.
+
+## 7. Sound — two jacks, same signal
+
+The console has one audio source: a sigma-delta bit on `uio[7]`. It comes out
+of **two** places at once, carrying an identical waveform:
+
+| Output | What it is | Why you'd use it |
+| --- | --- | --- |
+| **Cartridge Pmod jack** | `uio[7]` into the Pmod's RC filter + amp + 3.5 mm jack | **The path the silicon will use.** Test here to validate the real analog chain. |
+| **ULX3S onboard jack** | 4-bit R2R ladder per channel, driven full-scale from the same bit | Hear the console with no cartridge Pmod attached. |
+
+Both need a 3.5 mm male-male cable into **powered** speakers or a line input;
+neither drives a passive speaker meaningfully. The source is mono, so both
+channels of the onboard jack carry the same signal.
+
+Both go silent while the loader owns the bus, so sound starting up is itself a
+sign the SoC was released. If the onboard jack is too loud, drive fewer of the
+low `audio_l`/`audio_r` bits in `ulx3s_top.sv` to attenuate.
 
 ## Loader status codes (LED value)
 

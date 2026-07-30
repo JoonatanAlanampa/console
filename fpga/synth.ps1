@@ -3,7 +3,11 @@
 #   powershell -File fpga\synth.ps1 -SynthOnly   # yosys only (fast RTL check)
 #
 # Output: fpga\build\console.bit
-# Flash:  openFPGALoader -b ulx3s fpga\build\console.bit
+#
+# Load it one of two ways — the difference matters:
+#   openFPGALoader -b ulx3s    fpga\build\console.bit   # SRAM: GONE at power-off
+#   openFPGALoader -b ulx3s -f fpga\build\console.bit   # SPI flash: survives
+# Use -f for a console you can just switch on; omit it while iterating.
 #
 # The bitstream contains the UNCHANGED tt_um top plus the harness-only blocks
 # (SD loader, SNES decoder, header muxes) that the silicon has no pins for.

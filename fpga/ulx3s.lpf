@@ -15,10 +15,12 @@
 # YOUR board revision. The gp/gn 0-3 sites are proven by an earlier bitstream;
 # 4-10 are transcribed from ulx3s_v20 and have never been on hardware.
 #
-# 2026-07-30: all 43 LOCATE sites below were diffed against the upstream
-# emard/ulx3s doc/constraints/ulx3s_v20.lpf and match it exactly, so the
-# TRANSCRIPTION is clean. What is still unverified is whether this board is a
-# v2.0 — that part still needs the board in hand.
+# 2026-07-30: every LOCATE site below was diffed against the upstream
+# emard/ulx3s doc/constraints/ulx3s_v20.lpf and matches it exactly, so the
+# TRANSCRIPTION is clean (48 sites at the time of that check; the gamepad
+# block and the audio jack were added afterwards from the same source).
+# What is still unverified is whether this board is a v2.0 — that part still
+# needs the board in hand.
 
 LOCATE COMP "clk_25mhz" SITE "G2";
 IOBUF  PORT "clk_25mhz" PULLMODE=NONE IO_TYPE=LVCMOS33;
@@ -73,6 +75,28 @@ IOBUF  PORT "ftdi_rxd" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
 # keep the ESP32 booted (it can power-cycle the board otherwise)
 LOCATE COMP "wifi_gpio0" SITE "L2";
 IOBUF  PORT "wifi_gpio0" PULLMODE=UP IO_TYPE=LVCMOS33;
+
+# ---- onboard 3.5 mm audio jack (4-bit R2R ladder per channel) ----
+# A SECOND destination for the same audio, not a replacement: the cartridge
+# Pmod keeps its RC filter + amp + jack (uio[7]), which is the path the
+# silicon will actually use. This one just means you can hear the console
+# without the cartridge Pmod plugged in, straight into powered speakers.
+LOCATE COMP "audio_l[3]" SITE "B3";     # JACK TIP (left)
+LOCATE COMP "audio_l[2]" SITE "C3";
+LOCATE COMP "audio_l[1]" SITE "D3";
+LOCATE COMP "audio_l[0]" SITE "E4";
+LOCATE COMP "audio_r[3]" SITE "C5";     # JACK RING1 (right)
+LOCATE COMP "audio_r[2]" SITE "D5";
+LOCATE COMP "audio_r[1]" SITE "B5";
+LOCATE COMP "audio_r[0]" SITE "A3";
+IOBUF PORT "audio_l[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_l[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_l[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_l[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_r[3]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_r[2]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_r[1]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IOBUF PORT "audio_r[0]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
 
 # ---- J1: Cartridge Pmod (bidirectional) ----
 LOCATE COMP "pmod_gp[0]" SITE "B11";
