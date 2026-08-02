@@ -51,6 +51,24 @@ jobs:
           name: results-${{ matrix.block }}
           path: test/results_*.xml
 
+  # Host-side tools. These are not gateware and need no simulator, but they
+  # are the only things that touch a real card, and a mistake in them shows
+  # up as an LED code that blames the card instead of the writer.
+  tools:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install pytest
+        run: pip install pytest
+
+      - name: sdwrite device-targeting rules
+        run: python -m pytest tools/test_sdwrite.py -v
+
   # The Windows host this project is developed on has no `make`, so the
   # Makefile can only be verified here. It runs the twin suite, which is
   # the one with a build step (the netlist module rename) in front of it.
