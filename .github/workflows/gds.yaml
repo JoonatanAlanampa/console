@@ -6,11 +6,17 @@ name: gds
 # the docs without touching what the ASIC flow builds at all, and each of
 # those pushes was starting a full harden that could not tell you anything.
 #
+# UPDATE 2026-08-02: the console is an FPGA project and is NOT taping out (user
+# directive), so even `main` should not auto-start a harden. The 8x2 harden wall
+# (DPL-0036 hold-buffer flood) is parked, not fixed — auto-running it on every
+# push to main spends hours of CI to re-derive a red badge nobody is acting on,
+# and makes main look broken when the thing main actually ships is a bitstream.
+# The flow is kept intact and one keystroke away, because the ASIC shape is a
+# possible future project, just not the current one.
+#
 # Run one whenever you actually want it:
 #     gh workflow run gds.yaml --ref <branch>
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
