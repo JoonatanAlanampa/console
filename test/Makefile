@@ -4,10 +4,19 @@
 #   make BLOCK=vga      VGA race-the-beam timing core
 #   make BLOCK=twin     CORDIC-1 RTL vs own-cell gate netlist
 #   make BLOCK=qspi     quad-mode QSPI memory controller
-#   make all            all of them
+#   make blocks         the chip blocks below (NOT every suite — see below)
 #
 # `python run.py` does the same thing without make, which is how it is
 # usually run on the Windows host.
+#
+# ⚠ THIS FILE IS NOT THE FULL SUITE, AND `make blocks` DOES NOT RUN IT.
+# `run.py` is the authoritative list, and the CI matrix in
+# .github/workflows/test.yaml mirrors run.py, not this file. The six ULX3S
+# harness suites — sdspi, spiflash, sdload, gamepad, rehearse and fpga — are
+# deliberately absent here: they exist in run.py and in CI, and duplicating
+# their source lists into a driver that CI only ever exercises with
+# BLOCK=twin would mean maintaining configuration nothing checks.
+# Do not read a green `make blocks` as "the tests pass".
 
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
