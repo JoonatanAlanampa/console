@@ -18,7 +18,8 @@ What is already proven, and what is not:
 | **The card writer aims at the right sectors** | `python -m pytest tools/test_sdwrite.py`, also a CI gate: whole-disk targets only, volume and partition paths refused by name. The format was always tested; *where the bytes land* was not, and was wrong — see step 4 |
 | **NOT proven: that this board is a v2.0** | needs the board — see step 1 |
 | **NOT proven: any wire, connector or signal integrity** | needs the board |
-| **NOT DONE: `openFPGALoader` is not installed** | not hardware-blocked — do it now, see step 0 |
+| The flasher exists and runs | `openFPGALoader v1.1.1`, bundled in oss-cad-suite — **not on `PATH`**, load `environment.ps1` first (step 0) |
+| **NOT DONE: the WinUSB driver (Zadig)** | needs the board — Zadig binds to a *connected* device |
 
 ### About that Fmax, because it has been quoted three different ways
 
@@ -115,23 +116,42 @@ gh workflow run fpga.yaml && gh run watch
 `powershell -File fpga\synth.ps1 -SynthOnly` is the local *fast check* — it
 stops after yosys and only tells you the design still elaborates.
 
-**Do this part before the board arrives, because it is the one step that
-needs no hardware and will otherwise eat the first hour of the first day:**
-`openFPGALoader` is **not installed on this machine** (checked 2026-08-02,
-neither on Windows nor in WSL). Every flashing command below assumes it.
+**`openFPGALoader` is already on this machine — but not on `PATH`.** It ships
+inside oss-cad-suite (`~/opt/oss-cad-suite`, suite 20260717, openFPGALoader
+**v1.1.1**, which is the current release). Nothing to download.
 
-- Windows: take a release build from
-  `github.com/trabucayre/openFPGALoader/releases`, put it on `PATH`, and
-  check `openFPGALoader --version` runs.
-- The ULX3S's FT231X needs a **WinUSB** driver for openFPGALoader to claim
-  it — use Zadig. That normally costs you the board's virtual COM port, and
-  normally that hurts; **here it does not**, because this design does not use
-  the FTDI UART at all (`ftdi_rxd` is tied high in `ulx3s_top.sv` — all `uo`
-  bits are VGA). So there is no serial console to lose.
-- WSL is not a route: it has no USB access without `usbipd`. Flash from
-  Windows.
-- Verify with `openFPGALoader --detect` once the board is plugged in; it
-  should report an ECP5 idcode before you try to load anything.
+Run it directly and it dies with a bare `0xC0000135`, which is Windows for
+*a DLL is missing* and reads like a corrupt install. It is not: the binary
+needs the suite's own libraries. Load the environment first, in the same
+shell:
+
+```powershell
+. "$env:USERPROFILE\opt\oss-cad-suite\environment.ps1"
+openFPGALoader --version            # verified: openFPGALoader v1.1.1
+```
+
+Every flashing command below assumes you have done that in the shell you are
+typing into. `environment.bat` is the cmd.exe equivalent; `start.bat` opens a
+pre-configured shell.
+
+**What genuinely cannot be done before the board arrives:** the ULX3S's FT231X
+needs a **WinUSB** driver for openFPGALoader to claim it, and Zadig binds a
+driver *to a connected device* — so this waits for hardware. It normally costs
+you the board's virtual COM port, and normally that hurts; **here it does
+not**, because this design does not use the FTDI UART at all (`ftdi_rxd` is
+tied high in `ulx3s_top.sv` — all `uo` bits are VGA). There is no serial
+console to lose.
+
+- If you would rather not swap the driver, `fujprog` (the ULX3S-specific
+  programmer) is bundled too and uses FTDI's own D2XX driver instead of
+  WinUSB. It does **not** run as shipped: it needs `ftd2xx.dll` from FTDI's
+  driver package, which oss-cad-suite does not include (verified — it fails
+  with the same `0xC0000135`). That is the trade: Zadig once, or install the
+  FTDI D2XX package.
+- WSL is not a route: no USB access without `usbipd`. Flash from Windows.
+- First thing with the board plugged in: `openFPGALoader --detect`. It should
+  report an ECP5 idcode. If that works, USB, driver, cable and FTDI chip are
+  all proven and any later failure is the design's, not the plumbing's.
 
 ## 1. Confirm the board revision BEFORE plugging anything in
 
