@@ -88,11 +88,18 @@ on 2026-07-30. On the ULX3S none of that applies: `gp/gn[11..13]` are free and
 can be driven as outputs, and `src/snes_pad.sv` is still in the tree, still
 verified by five tests.
 
-Re-instantiating it in the harness is a real option that needs no Pmod, only a
-way to reach the pad's 7-pin plug — an extension cable to cut (~€12), or a
-socket breakout onto the jumper wires already owned. Ask before building it:
-it is maybe an afternoon of harness work plus tests, and it is wasted if the
-Pmod ships next week.
+Re-instantiating it in the harness needs no Pmod, only a way to reach the pad's
+7-pin plug — an extension cable to cut (~€12), or a socket breakout onto the
+jumper wires already owned. `gp/gn[20..23]` is a free Pmod footprint with no
+wifi or ADC sharing, so there is clean room for two pads (LATCH and CLK can be
+shared; that is 2 outputs + 2 data inputs).
+
+**Decision 2026-08-02: not building it. The Gamepad Pmod is the path.** It is
+bought, and duplicating the controller front end costs an afternoon plus tests
+that would be wasted if the Pmod ships. This section exists so that if the
+order turns out to have been cancelled for being out of stock, nobody has to
+re-derive that a fallback is possible — it is, the pins are free, and the RTL
+is already written and tested.
 
 ## 0. Build the bitstream
 
