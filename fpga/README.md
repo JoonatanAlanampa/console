@@ -41,30 +41,38 @@ The first hit is the estimate, the last is the answer.
 
 ## Before you start: what you can actually run today
 
-Three pieces of hardware gate this checklist, and only one of them is in the
-building. Checked 2026-08-02:
+Checked against SHOPPING.md, 2026-08-02. **Two of the seven things this
+checklist needs are in the building.**
 
 | Needed for | Status |
 | --- | --- |
-| **ULX3S 85F** | bought, **not yet arrived**. Nothing below can run without it. |
-| **Cartridge Pmod** (steps 3-4, 7) | **in hand**, board #1 passed the pre-power bench check |
-| **Tiny VGA Pmod** (steps 5, 7) | **not bought** — €15, in stock at store.tinytapeout.com |
-| **TT Gamepad Pmod** (step 6) | **not bought and OUT OF STOCK**, no restock date (checked 2026-07-29) |
+| **ULX3S 85F** | bought 2026-07-19, **not yet arrived**. Nothing below runs without it. |
+| **Cartridge Pmod** (steps 3-4, 7) | ✅ **in hand**, board #1 passed the pre-power bench check |
+| **Monitor + VGA cable** (step 5) | ✅ bought 2026-07-30 / 07-31 |
+| **microSD card** (step 4) | ❌ **not bought** — €12.90 Hama microSDHC 32 GB, Motonet 95-01852. Must be **microSDHC**, not full-size, not SDXC. |
+| **Tiny VGA Pmod** (steps 5, 7) | ❌ **not bought** — €15, in stock at store.tinytapeout.com |
+| **TT Gamepad Pmod** (step 6) | ⛔ **not bought and OUT OF STOCK**, no restock date (checked 2026-07-29) |
+| **3.5 mm cable + powered speakers** (step 7) | ❌ **not bought** — €9.99 + €11.99, Motonet |
 
-So the honest reading of this document: steps 0-4 are a complete procedure
-waiting on a delivery, **step 5 needs a €15 order that has not been placed**,
-and **step 6 cannot be done at any price right now**. The gateware for all of
-it is written and simulated; nothing here is blocked on code.
+The two SNES pads are bought, but they are **not a controller path on their
+own**: they plug into the Gamepad Pmod, and `src/snes_pad.sv` is no longer
+instantiated anywhere. No Pmod, no input.
 
-The good news about the ordering: steps 2, 3 and 4 need no Pmod but the
-cartridge, so a board arriving alone still gets you as far as "a game loads off
-a card and the console is running" — you just cannot see it yet. Video is the
-first thing you cannot fake, which is why the VGA Pmod is the one worth
-ordering before the board lands.
+So the honest reading of this document: **nothing here can be run today**, and
+when the board does arrive, what you get with only the cartridge Pmod is
+step 2 — LEDs walking the loader status codes and then counting frames. That
+is a real result (it means the design is alive and video timing is running),
+but it is not a game on a screen.
 
-`ui_in` is driven from the gamepad receiver, and an absent Pmod reads as *no
-buttons* rather than as garbage (tested — `test/run.py fpga`), so steps 0-5 all
-work with nothing on the gamepad header.
+`ui_in` is driven from the gamepad receiver and an absent Pmod reads as *no
+buttons* rather than as garbage (tested — `test/run.py fpga`), so the missing
+Pmod degrades safely. It also means **`sw/game.c` gates its audio on holding
+B**, so with no controller the demo is silent as well as motionless.
+
+Cheapest path to something worth looking at, once the board lands: the microSD
+card (€12.90) and the Tiny VGA Pmod (€15). That gets a game loaded off a card,
+booted, and drawn on the monitor you already own. Input and sound both wait on
+the Pmod that cannot currently be bought.
 
 ## 0. Build the bitstream
 
