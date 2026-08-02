@@ -41,38 +41,58 @@ The first hit is the estimate, the last is the answer.
 
 ## Before you start: what you can actually run today
 
-Checked against SHOPPING.md, 2026-08-02. **Two of the seven things this
-checklist needs are in the building.**
+Per SHOPPING.md as of 2026-08-02, **everything this checklist needs is
+bought**. What is *bought* and what is *in your hand* are still two different
+columns, and this table keeps them apart on purpose — a delivery date is not a
+verification.
 
-| Needed for | Status |
-| --- | --- |
-| **ULX3S 85F** | bought 2026-07-19, **not yet arrived**. Nothing below runs without it. |
-| **Cartridge Pmod** (steps 3-4, 7) | ✅ **in hand**, board #1 passed the pre-power bench check |
-| **Monitor + VGA cable** (step 5) | ✅ bought 2026-07-30 / 07-31 |
-| **microSD card** (step 4) | ❌ **not bought** — €12.90 Hama microSDHC 32 GB, Motonet 95-01852. Must be **microSDHC**, not full-size, not SDXC. |
-| **Tiny VGA Pmod** (steps 5, 7) | ❌ **not bought** — €15, in stock at store.tinytapeout.com |
-| **TT Gamepad Pmod** (step 6) | ⛔ **not bought and OUT OF STOCK**, no restock date (checked 2026-07-29) |
-| **3.5 mm cable + powered speakers** (step 7) | ❌ **not bought** — €9.99 + €11.99, Motonet |
+| Needed for | Bought | In hand |
+| --- | --- | --- |
+| **ULX3S 85F** | ✅ 2026-07-19 | ❌ **not yet arrived** — nothing below runs without it |
+| **Cartridge Pmod** (steps 3-4, 7) | ✅ | ✅ board #1 passed the pre-power bench check |
+| **Monitor + VGA cable** (step 5) | ✅ | ✅ |
+| **microSD card** (step 4) | ✅ | ❔ confirm it is **microSDHC**, not full-size, not SDXC |
+| **Tiny VGA Pmod** (steps 5, 7) | ✅ | ❔ |
+| **TT Gamepad Pmod** (step 6) | ✅ | ❔ was out of stock 2026-07-29 — check the order actually shipped |
+| **3.5 mm cable + speakers** (step 7) | ✅ | ❔ |
 
-The two SNES pads are bought, but they are **not a controller path on their
-own**: they plug into the Gamepad Pmod, and `src/snes_pad.sv` is no longer
-instantiated anywhere. No Pmod, no input.
+The two SNES pads are bought, but on their own they are **not a controller
+path**: they plug into the Gamepad Pmod, and `src/snes_pad.sv` is not
+instantiated anywhere in the harness. See "If the Gamepad Pmod does not turn
+up" below — on an FPGA that is a solvable problem, and it was not solvable on
+silicon, which is why the design looks the way it does.
 
-So the honest reading of this document: **nothing here can be run today**, and
-when the board does arrive, what you get with only the cartridge Pmod is
-step 2 — LEDs walking the loader status codes and then counting frames. That
-is a real result (it means the design is alive and video timing is running),
-but it is not a game on a screen.
+So the honest reading: **the blocker is now delivery, not money.** Everything
+below is a procedure waiting on boxes. When the ULX3S lands with only the
+cartridge Pmod attached, you get step 2 — LEDs walking the loader status codes
+and then counting frames. That is a real result (the design is alive and video
+timing is running) but it is not a game on a screen; steps 4-6 need the card
+and the two Pmods.
 
 `ui_in` is driven from the gamepad receiver and an absent Pmod reads as *no
-buttons* rather than as garbage (tested — `test/run.py fpga`), so the missing
-Pmod degrades safely. It also means **`sw/game.c` gates its audio on holding
-B**, so with no controller the demo is silent as well as motionless.
+buttons* rather than as garbage (tested — `test/run.py fpga`), so a missing
+Pmod degrades safely. It also means **`sw/game.c` gates its tone on holding
+B**, so with no controller the demo is silent as well as motionless — do not
+read that as an audio fault.
 
-Cheapest path to something worth looking at, once the board lands: the microSD
-card (€12.90) and the Tiny VGA Pmod (€15). That gets a game loaded off a card,
-booted, and drawn on the monitor you already own. Input and sound both wait on
-the Pmod that cannot currently be bought.
+### If the Gamepad Pmod does not turn up
+
+It was out of stock on 2026-07-29 with no restock date, so this is worth
+knowing: **the reason the raw SNES pads cannot be used is a silicon
+constraint, and the console is no longer going to silicon.**
+
+A bare SNES pad needs LATCH and CLK as *outputs*. TT's `ui` pins are
+input-only, so on a chip the Gamepad Pmod (whose CH32V003 is the master) is
+the only path that can exist — that is why `snes_pad.sv` was un-instantiated
+on 2026-07-30. On the ULX3S none of that applies: `gp/gn[11..13]` are free and
+can be driven as outputs, and `src/snes_pad.sv` is still in the tree, still
+verified by five tests.
+
+Re-instantiating it in the harness is a real option that needs no Pmod, only a
+way to reach the pad's 7-pin plug — an extension cable to cut (~€12), or a
+socket breakout onto the jumper wires already owned. Ask before building it:
+it is maybe an afternoon of harness work plus tests, and it is wasted if the
+Pmod ships next week.
 
 ## 0. Build the bitstream
 
