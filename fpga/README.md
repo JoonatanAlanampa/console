@@ -10,12 +10,61 @@ What is already proven, and what is not:
 
 | Proven | How |
 | --- | --- |
-| The design fits and closes timing | CI `fpga` workflow: **62.71 MHz post-route, PASS at 25 MHz**, 8 % of the 85F |
+| The design fits and closes timing | CI `fpga` workflow: **64.27 MHz post-route, PASS at 25 MHz**; 6401 LUT (7 %) and 2493 FF (2 %) of the 85F |
 | Card -> loader -> flash -> XIP boot -> running game | `python test/run.py rehearse`, using the real `sw/game.bin` and the real `tools/sdwrite.py` |
 | The loader's awkward cases | `python test/run.py sdload` — empty slot, foreign card, bad checksum, second-boot skip, card-detect unwired |
-| The LPF *transcription* | All 43 sites diffed against upstream `emard/ulx3s doc/constraints/ulx3s_v20.lpf` (2026-07-30) |
+| **The header permutation and the straps** | `python test/run.py fpga` — the only suite that elaborates `ulx3s_top`; boots through the J1 wires in both seatings, checks J2 against the VGA bit order, and requires a *wrong* SW1 to fail |
+| Every pin is constrained, on the right ball | `python fpga/check_pins.py`, also a CI gate: 59 ports, 59 LOCATEs, all 59 sites diffed against upstream `emard/ulx3s doc/constraints/ulx3s_v20.lpf` (2026-08-02), clock constrained, no Pmod straddling two footprints |
 | **NOT proven: that this board is a v2.0** | needs the board — see step 1 |
 | **NOT proven: any wire, connector or signal integrity** | needs the board |
+
+### About that Fmax, because it has been quoted three different ways
+
+**64.27 MHz is the number.** It is the post-route figure from the `fpga`
+workflow on `main`. Two wrong values were in circulation and both are
+explainable, so they are recorded here rather than silently overwritten:
+
+- **62.71 MHz** — correct once, for the commit *before* the Gamepad Pmod
+  receiver and the onboard audio jack landed (6800 LUT / 2522 FF). Those two
+  commits changed the design; the number moved with it.
+- **61.95 MHz** — same story, one commit later (6405 LUT / 2493 FF).
+- **53.72 MHz** — *not* a stale number but a different measurement. nextpnr
+  prints `Max frequency for clock` **twice**: once straight after placement,
+  from estimated wire delays, and again after routing, from the real ones. The
+  post-placement estimate is the pessimistic one here, and an unlabelled grep
+  of the log returns it first. The `report` step in `.github/workflows/fpga.yaml`
+  now labels both and puts the post-route figure first, so the next person
+  reads the right one off the job summary.
+
+If you are re-deriving it: `grep "Max frequency for clock" nextpnr.log | tail -1`.
+The first hit is the estimate, the last is the answer.
+
+## Before you start: what you can actually run today
+
+Three pieces of hardware gate this checklist, and only one of them is in the
+building. Checked 2026-08-02:
+
+| Needed for | Status |
+| --- | --- |
+| **ULX3S 85F** | bought, **not yet arrived**. Nothing below can run without it. |
+| **Cartridge Pmod** (steps 3-4, 7) | **in hand**, board #1 passed the pre-power bench check |
+| **Tiny VGA Pmod** (steps 5, 7) | **not bought** — €15, in stock at store.tinytapeout.com |
+| **TT Gamepad Pmod** (step 6) | **not bought and OUT OF STOCK**, no restock date (checked 2026-07-29) |
+
+So the honest reading of this document: steps 0-4 are a complete procedure
+waiting on a delivery, **step 5 needs a €15 order that has not been placed**,
+and **step 6 cannot be done at any price right now**. The gateware for all of
+it is written and simulated; nothing here is blocked on code.
+
+The good news about the ordering: steps 2, 3 and 4 need no Pmod but the
+cartridge, so a board arriving alone still gets you as far as "a game loads off
+a card and the console is running" — you just cannot see it yet. Video is the
+first thing you cannot fake, which is why the VGA Pmod is the one worth
+ordering before the board lands.
+
+`ui_in` is driven from the gamepad receiver, and an absent Pmod reads as *no
+buttons* rather than as garbage (tested — `test/run.py fpga`), so steps 0-5 all
+work with nothing on the gamepad header.
 
 ## 0. Build the bitstream
 
@@ -102,13 +151,18 @@ Insert the card, press BTN0, and watch the LEDs walk the status codes:
 working, and it is the difference between a one-second boot and a minute of
 needless flash wear.
 
-## 5. Tiny VGA Pmod on J2
+## 5. Tiny VGA Pmod on J2 — ⚠ NOT BOUGHT YET (€15, in stock)
 
 Only now add video, on **J2 = gp/gn 4-7** — sites that have never been on
 hardware. **SW2** flips the VGA row mapping the same way SW1 does for the
 cartridge.
 
-## 6. TT Gamepad Pmod
+What *is* settled without the Pmod: the J2 sites are diffed against upstream
+(`fpga/check_pins.py`), and `test/run.py fpga` checks that `uo_out` reaches
+`vga_gp`/`vga_gn` in the order the Tiny VGA Pmod expects, under both SW2
+settings. What is not settled is everything past the connector.
+
+## 6. TT Gamepad Pmod — ⚠ NOT BOUGHT, AND OUT OF STOCK
 
 The Pmod goes on the **gp/gn[8..10]** block. All three signals (latch, clock,
 data) are **inputs** — the Pmod's CH32V003 is the master. That is not a
@@ -127,10 +181,18 @@ already-decoded buttons.
   present, zero buttons**. If LEDs light up with nothing connected, that is
   wrong and worth stopping for.
 
-Note the Pmod was **out of stock** when this was written, so none of it has
-met its hardware. The protocol is matched against the designer's own
-reference receiver (`vendor/gamepad_pmod.v`), which is the strongest check
-available short of the real thing.
+The Pmod is **not owned and was still out of stock on 2026-07-29**, with no
+restock date, so none of this has met its hardware and this step is not
+skippable-by-effort — there is nothing to plug in. Everything up to the
+connector is checked twice over: the protocol against the designer's own
+reference receiver (`vendor/gamepad_pmod.v`, vendored verbatim, 8 tests in
+`test/run.py gamepad`), and the SW3 row selection plus the SW4 LED aid at the
+pin level in `test/run.py fpga`. That is the strongest evidence available short
+of the real thing, and it is still not evidence about the real thing.
+
+**The console is playable without it only in the trivial sense**: the game runs
+and draws, but nothing moves, because `ui_in` is all zeros. Ordering this Pmod
+is the last thing between the current state and grand goal 1.
 
 ## 7. Sound — two jacks, same signal
 
