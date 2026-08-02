@@ -1,5 +1,25 @@
 # Console — plan
 
+## ⛔ SCOPE: FPGA ONLY. Not taping out. (user directive 2026-08-02)
+
+**The console will not be fabricated.** It is a ULX3S/FPGA project. The only
+remaining possible tapeout in the whole workspace is `vertical-slice` — CORDIC-1
+on the own cells — and the user has said that is the last ASIC tapeout they will
+do.
+
+What that changes here:
+- **The 8x2 harden wall (DPL-0036, the hold-buffer flood that congests routing)
+  is OFF the critical path.** Park it. Do not spend sessions on it.
+- The "eventually hardened on the self-designed standard-cell library" ambition
+  below is retired for this design; `vertical-slice` carries that proof instead,
+  which is what it was built for.
+- Everything else — the SoC, the video, the audio, the cartridge Pmod, the
+  ULX3S harness and the microSD loader — is unaffected and is still the goal.
+  The console still has to *work*; it just works on an FPGA.
+- `info.yaml`, `src/tt_um_*.sv` and the TT-shaped pinout stay as they are. The
+  tt_um wrapper is a perfectly good module boundary and the FPGA harness is
+  built around it.
+
 The grand-goal finale: a game console SoC built, as far as possible, out
 of self-designed parts. TinyRV32 CPU + race-the-beam video + audio + two
 SNES pads + the custom cartridge Pmod, eventually hardened on the
