@@ -18,7 +18,10 @@ jobs:
         #   ULX3S harness blocks (no silicon pin exists for these):
                 sdspi, spiflash, sdload, gamepad,
         #   full chain: real sw/game.bin -> card image -> loader -> flash -> XIP boot
-                rehearse]
+                rehearse,
+        #   ulx3s_top itself, through the physical header pins: the Pmod row
+        #   permutations, the SW1/SW2/SW3 straps and the bus mux
+                fpga]
     steps:
       - uses: actions/checkout@v4
 

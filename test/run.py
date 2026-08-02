@@ -37,6 +37,26 @@ def twin_sources():
 
 
 SUITES = {
+    # The only suite that elaborates ulx3s_top itself. Everything else drives
+    # the chip or a sub-block, which leaves the header permutations, the
+    # orientation straps and the bus mux untested -- see tb_fpga.v.
+    "fpga": dict(
+        top="tb_fpga",
+        module="test_fpga",
+        sources=lambda: [
+            SRC / "tt_um_joonatanalanampa_console.sv",
+            SRC / "cpu_adapter.sv", SRC / "console_soc.sv", SRC / "sysregs.sv",
+            SRC / "vga_engine.sv", SRC / "vga_fetch.sv", SRC / "vga_timing.sv",
+            SRC / "audio.sv", SRC / "qspi_arbiter.sv", SRC / "qspi_ctrl.sv",
+            VENDOR / "rv32_core.sv", VENDOR / "control.sv", VENDOR / "immgen.sv",
+            VENDOR / "regfile.sv", VENDOR / "alu.sv", VENDOR / "branch.sv",
+            VENDOR / "uart_tx.sv", VENDOR / "gamepad_pmod.v",
+            FPGA / "spi_master.sv", FPGA / "sd_spi.sv", FPGA / "spi_flash.sv",
+            FPGA / "sd_loader.sv", FPGA / "gamepad_ulx3s.sv",
+            FPGA / "ulx3s_top.sv",
+            TEST_DIR / "tb_fpga.v",
+        ],
+    ),
     "rehearse": dict(
         top="tb_rehearse",
         module="test_rehearse",
