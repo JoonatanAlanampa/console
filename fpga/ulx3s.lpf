@@ -15,10 +15,17 @@
 # YOUR board revision. The gp/gn 0-3 sites are proven by an earlier bitstream;
 # 4-10 are transcribed from ulx3s_v20 and have never been on hardware.
 #
-# 2026-07-30: every LOCATE site below was diffed against the upstream
-# emard/ulx3s doc/constraints/ulx3s_v20.lpf and matches it exactly, so the
-# TRANSCRIPTION is clean (48 sites at the time of that check; the gamepad
-# block and the audio jack were added afterwards from the same source).
+# 2026-08-02: all 59 LOCATE sites below were diffed against the upstream
+# emard/ulx3s doc/constraints/ulx3s_v20.lpf and match it exactly, so the
+# TRANSCRIPTION is clean. (The earlier 2026-07-30 diff covered 48 sites; the
+# gamepad block and the audio jack were added after it and were re-checked
+# from the same source this time, along with everything else.)
+#
+# That diff is no longer a thing someone remembered to do: `fpga/check_pins.py`
+# re-runs it on every CI build, and also catches a port with no LOCATE, a
+# LOCATE with no port, a missing clock FREQUENCY constraint, and a Pmod block
+# spread across two physical footprints.
+#
 # What is still unverified is whether this board is a v2.0 — that part still
 # needs the board in hand.
 
@@ -42,7 +49,8 @@ IOBUF PORT "btn[4]" PULLMODE=DOWN IO_TYPE=LVCMOS33;
 IOBUF PORT "btn[5]" PULLMODE=DOWN IO_TYPE=LVCMOS33;
 IOBUF PORT "btn[6]" PULLMODE=DOWN IO_TYPE=LVCMOS33;
 
-# SW1 = cartridge row mapping, SW2 = VGA row mapping (off = MAP A)
+# SW1 = cartridge row mapping, SW2 = VGA row mapping (off = MAP A),
+# SW3 = gamepad row mapping, SW4 = put btn1[7:0] on the LEDs (bring-up aid).
 LOCATE COMP "sw[0]" SITE "E8";
 LOCATE COMP "sw[1]" SITE "D8";
 LOCATE COMP "sw[2]" SITE "D7";
