@@ -30,6 +30,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Runs FIRST, before the toolchain is even downloaded. Every failure it
+      # catches is one nextpnr would either report ten minutes later or, worse,
+      # not report at all (a LOCATE on the wrong ball builds perfectly).
+      - name: pin constraints agree with the harness and the board
+        run: python fpga/check_pins.py
+
       - name: cache oss-cad-suite
         id: cache-oss
         uses: actions/cache@v4
@@ -101,9 +107,33 @@ jobs:
             grep -E "Total LUT4s|TRELLIS_COMB|TRELLIS_FF|TRELLIS_IO|DP16KD|MULT18X18D|CCU2C" fpga/build/nextpnr.log | head -12
             echo '```'
             echo "### Timing (constraint: 25 MHz, from fpga/ulx3s.lpf)"
+            # nextpnr prints "Max frequency" TWICE and they are NOT the same
+            # measurement: once right after placement, using ESTIMATED wire
+            # delays, and again after routing, using the real ones. Only the
+            # second is the answer. On this design they differ by ~10 MHz, the
+            # placement estimate being the pessimistic one — and an unlabelled
+            # grep of both is exactly how the wrong number ends up quoted in a
+            # README. So label them, and put the post-route one first.
+            nfreq=$(grep -c "Max frequency for clock" fpga/build/nextpnr.log)
+            post_place=$(grep "Max frequency for clock" fpga/build/nextpnr.log | head -1 | sed 's/.*IN.: //')
+            post_route=$(grep "Max frequency for clock" fpga/build/nextpnr.log | tail -1 | sed 's/.*IN.: //')
+            if [ "$nfreq" -ge 2 ]; then
+              echo "**Post-route Fmax — THIS is the number to quote: \`$post_route\`**"
+              echo
+              echo "<sub>Post-*placement* estimate (before routing, pessimistic, do NOT quote): \`$post_place\`</sub>"
+            elif [ "$nfreq" -eq 1 ]; then
+              echo "**Only a post-placement estimate exists — routing did not complete:** \`$post_place\`"
+            else
+              echo "_nextpnr reported no clock frequency at all._"
+            fi
+            echo
+            echo "<details><summary>critical path and cross-domain delays</summary>"
+            echo
             echo '```'
-            grep -E "Max frequency for clock|Max delay|Info: Critical path" fpga/build/nextpnr.log | head -20
+            grep -E "Max delay|Info: Critical path" fpga/build/nextpnr.log | head -20
             echo '```'
+            echo
+            echo "</details>"
             if [ "${{ steps.pnr.outputs.rc }}" != "0" ]; then
               echo "**nextpnr exited ${{ steps.pnr.outputs.rc }}** — see the full log in the artifact."
             fi
