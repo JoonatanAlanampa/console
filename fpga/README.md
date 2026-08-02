@@ -15,8 +15,10 @@ What is already proven, and what is not:
 | The loader's awkward cases | `python test/run.py sdload` — empty slot, foreign card, bad checksum, second-boot skip, card-detect unwired |
 | **The header permutation and the straps** | `python test/run.py fpga` — the only suite that elaborates `ulx3s_top`; boots through the J1 wires in both seatings, checks J2 against the VGA bit order, and requires a *wrong* SW1 to fail |
 | Every pin is constrained, on the right ball | `python fpga/check_pins.py`, also a CI gate: 59 ports, 59 LOCATEs, all 59 sites diffed against upstream `emard/ulx3s doc/constraints/ulx3s_v20.lpf` (2026-08-02), clock constrained, no Pmod straddling two footprints |
+| **The card writer aims at the right sectors** | `python -m pytest tools/test_sdwrite.py`, also a CI gate: whole-disk targets only, volume and partition paths refused by name. The format was always tested; *where the bytes land* was not, and was wrong — see step 4 |
 | **NOT proven: that this board is a v2.0** | needs the board — see step 1 |
 | **NOT proven: any wire, connector or signal integrity** | needs the board |
+| **NOT DONE: `openFPGALoader` is not installed** | not hardware-blocked — do it now, see step 0 |
 
 ### About that Fmax, because it has been quoted three different ways
 
@@ -101,7 +103,7 @@ order turns out to have been cancelled for being out of stock, nobody has to
 re-derive that a fallback is possible — it is, the pins are free, and the RTL
 is already written and tested.
 
-## 0. Build the bitstream
+## 0. Build the bitstream — and install the thing that flashes it
 
 Do not run place-and-route locally (project compute policy). Either grab the
 `console-fpga` artifact from the `fpga` workflow, or:
@@ -112,6 +114,24 @@ gh workflow run fpga.yaml && gh run watch
 
 `powershell -File fpga\synth.ps1 -SynthOnly` is the local *fast check* — it
 stops after yosys and only tells you the design still elaborates.
+
+**Do this part before the board arrives, because it is the one step that
+needs no hardware and will otherwise eat the first hour of the first day:**
+`openFPGALoader` is **not installed on this machine** (checked 2026-08-02,
+neither on Windows nor in WSL). Every flashing command below assumes it.
+
+- Windows: take a release build from
+  `github.com/trabucayre/openFPGALoader/releases`, put it on `PATH`, and
+  check `openFPGALoader --version` runs.
+- The ULX3S's FT231X needs a **WinUSB** driver for openFPGALoader to claim
+  it — use Zadig. That normally costs you the board's virtual COM port, and
+  normally that hurts; **here it does not**, because this design does not use
+  the FTDI UART at all (`ftdi_rxd` is tied high in `ulx3s_top.sv` — all `uo`
+  bits are VGA). So there is no serial console to lose.
+- WSL is not a route: it has no USB access without `usbipd`. Flash from
+  Windows.
+- Verify with `openFPGALoader --detect` once the board is plugged in; it
+  should report an ECP5 idcode before you try to load anything.
 
 ## 1. Confirm the board revision BEFORE plugging anything in
 
@@ -169,16 +189,36 @@ proven by an earlier bitstream, which is why the cartridge goes first.
 ```
 python sw/build.py                                   # produces sw/game.bin
 python tools/sdwrite.py sw/game.bin --out card.img   # dry run: no device touched
-python tools/sdwrite.py sw/game.bin --device <DEV> --yes
+python tools/sdwrite.py --list                       # which disk is the card?
+python tools/sdwrite.py sw/game.bin --device \\.\PhysicalDrive2 --yes
 ```
 
 Do the `--out` run first — it produces the exact bytes that would go on the
 card, so you can check the reported length and sum32 before anything is
 written to a real device.
 
-`sdwrite.py` refuses to touch anything that is not a removable device, and
-refuses anything over 64 GiB. Both guards are deliberate; if it refuses, check
-the device rather than removing the guard.
+**The target is the whole disk, never a drive letter.** This is a correctness
+rule before it is a safety one, and it is worth understanding rather than
+copying: `sd_loader.sv` reads its header with CMD17 at block address 0 — the
+first sector of the *card*. On Windows `\\.\E:` is the *volume*, whose sector 0
+is the first sector of the *partition*, and an SD-spec-formatted SDHC card puts
+that partition thousands of sectors in. Writing there succeeds, verifies, looks
+perfect, and leaves the board reporting `0xE1 ST_E_MAGIC` — an error that
+accuses the card. `/dev/sdb1` instead of `/dev/sdb` is the same mistake in
+Linux spelling. `sdwrite.py` now refuses both by name and says why.
+
+Run `--list` first to get the disk number: it prints every disk with its size,
+bus type and drive letters, and marks the ones it would refuse. It needs no
+elevation, so you can find the number before opening an Administrator shell —
+which the write itself does need.
+
+Other guards, all deliberate: the disk must be removable or on a USB/SD/MMC
+bus, `PhysicalDrive0` is refused outright, anything over 64 GiB is refused, and
+every byte written is **read back and compared** before the tool claims
+success. On Windows the tool also locks and dismounts the card's volumes first;
+without that, Windows refuses sector writes to a mounted filesystem even for an
+Administrator, and the error it gives you says "access denied" as though you
+had forgotten to elevate.
 
 Insert the card, press BTN0, and watch the LEDs walk the status codes:
 `0x01 -> 0x02 -> 0x03 -> 0x04 -> 0x05 -> 0x06 -> 0x80`. A **second** press should give
@@ -186,7 +226,7 @@ Insert the card, press BTN0, and watch the LEDs walk the status codes:
 working, and it is the difference between a one-second boot and a minute of
 needless flash wear.
 
-## 5. Tiny VGA Pmod on J2 — ⚠ NOT BOUGHT YET (€15, in stock)
+## 5. Tiny VGA Pmod on J2 — bought 2026-08-02, arrival unconfirmed
 
 Only now add video, on **J2 = gp/gn 4-7** — sites that have never been on
 hardware. **SW2** flips the VGA row mapping the same way SW1 does for the
@@ -197,7 +237,7 @@ What *is* settled without the Pmod: the J2 sites are diffed against upstream
 `vga_gp`/`vga_gn` in the order the Tiny VGA Pmod expects, under both SW2
 settings. What is not settled is everything past the connector.
 
-## 6. TT Gamepad Pmod — ⚠ NOT BOUGHT, AND OUT OF STOCK
+## 6. TT Gamepad Pmod — bought 2026-08-02, but confirm it shipped
 
 The Pmod goes on the **gp/gn[8..10]** block. All three signals (latch, clock,
 data) are **inputs** — the Pmod's CH32V003 is the master. That is not a
@@ -216,17 +256,18 @@ already-decoded buttons.
   present, zero buttons**. If LEDs light up with nothing connected, that is
   wrong and worth stopping for.
 
-The Pmod is **not owned and was still out of stock on 2026-07-29**, with no
-restock date, so none of this has met its hardware and this step is not
-skippable-by-effort — there is nothing to plug in. Everything up to the
-connector is checked twice over: the protocol against the designer's own
-reference receiver (`vendor/gamepad_pmod.v`, vendored verbatim, 8 tests in
-`test/run.py gamepad`), and the SW3 row selection plus the SW4 LED aid at the
-pin level in `test/run.py fpga`. That is the strongest evidence available short
-of the real thing, and it is still not evidence about the real thing.
+The Pmod was **bought on 2026-08-02 but was out of stock on 2026-07-29 with no
+restock date**, so this is the one line in SHOPPING.md most likely to be wrong
+— confirm the order was accepted rather than back-ordered or cancelled. Nothing
+here has met its hardware either way. Everything up to the connector is checked
+twice over: the protocol against the designer's own reference receiver
+(`vendor/gamepad_pmod.v`, vendored verbatim, 8 tests in `test/run.py gamepad`),
+and the SW3 row selection plus the SW4 LED aid at the pin level in
+`test/run.py fpga`. That is the strongest evidence available short of the real
+thing, and it is still not evidence about the real thing.
 
 **The console is playable without it only in the trivial sense**: the game runs
-and draws, but nothing moves, because `ui_in` is all zeros. Ordering this Pmod
+and draws, but nothing moves, because `ui_in` is all zeros. This Pmod arriving
 is the last thing between the current state and grand goal 1.
 
 ## 7. Sound — two jacks, same signal
