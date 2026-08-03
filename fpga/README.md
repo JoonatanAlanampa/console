@@ -56,7 +56,7 @@ verification.
 | **Monitor + VGA cable** (step 5) | ✅ | ✅ |
 | **microSD card** (step 4) | ✅ | ❔ confirm it is **microSDHC**, not full-size, not SDXC |
 | **Tiny VGA Pmod** (steps 5, 7) | ✅ | ❔ |
-| **TT Gamepad Pmod** (step 6) | ✅ | ❔ was out of stock 2026-07-29 — check the order actually shipped |
+| **TT Gamepad Pmod** (step 6) | ✅ | ❔ **in stock again as of 2026-08-03** — the out-of-stock worry is closed |
 | **3.5 mm cable + speakers** (step 7) | ✅ | ❔ |
 
 The two SNES pads are bought, but on their own they are **not a controller
@@ -80,8 +80,9 @@ read that as an audio fault.
 
 ### If the Gamepad Pmod does not turn up
 
-It was out of stock on 2026-07-29 with no restock date, so this is worth
-knowing: **the reason the raw SNES pads cannot be used is a silicon
+**Largely moot as of 2026-08-03: the Pmod is in stock again**, so the order has
+somewhere to come from. Kept because the underlying point is worth knowing
+regardless: **the reason the raw SNES pads cannot be used is a silicon
 constraint, and the console is no longer going to silicon.**
 
 A bare SNES pad needs LATCH and CLK as *outputs*. TT's `ui` pins are
@@ -98,11 +99,10 @@ wifi or ADC sharing, so there is clean room for two pads (LATCH and CLK can be
 shared; that is 2 outputs + 2 data inputs).
 
 **Decision 2026-08-02: not building it. The Gamepad Pmod is the path.** It is
-bought, and duplicating the controller front end costs an afternoon plus tests
-that would be wasted if the Pmod ships. This section exists so that if the
-order turns out to have been cancelled for being out of stock, nobody has to
-re-derive that a fallback is possible — it is, the pins are free, and the RTL
-is already written and tested.
+bought and back in stock, and duplicating the controller front end costs an
+afternoon plus tests that would be wasted. This section stays only so that
+nobody has to re-derive that a fallback exists — it does, the pins are free,
+and the RTL is already written and tested.
 
 ## 0. Build the bitstream — and install the thing that flashes it
 
@@ -276,10 +276,9 @@ already-decoded buttons.
   present, zero buttons**. If LEDs light up with nothing connected, that is
   wrong and worth stopping for.
 
-The Pmod was **bought on 2026-08-02 but was out of stock on 2026-07-29 with no
-restock date**, so this is the one line in SHOPPING.md most likely to be wrong
-— confirm the order was accepted rather than back-ordered or cancelled. Nothing
-here has met its hardware either way. Everything up to the connector is checked
+The Pmod was **bought on 2026-08-02 and is in stock again as of 2026-08-03**,
+so the earlier back-order worry is closed. Nothing here has met its hardware
+either way. Everything up to the connector is checked
 twice over: the protocol against the designer's own reference receiver
 (`vendor/gamepad_pmod.v`, vendored verbatim, 8 tests in `test/run.py gamepad`),
 and the SW3 row selection plus the SW4 LED aid at the pin level in

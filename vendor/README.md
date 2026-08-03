@@ -21,7 +21,7 @@ to** from this repository.
 The Gamepad Pmod designer's own reference receiver (Pat Deegan,
 Apache-2.0), used verbatim rather than reimplemented: it is the code the
 Pmod's firmware was developed against, so matching it is the closest thing
-to hardware validation available while the Pmod is out of stock.
+to hardware validation available until the board and the Pmod are in hand.
 
 Used by the ULX3S harness through `fpga/gamepad_ulx3s.sv`, which only
 repacks the outputs into the bit order the harness already used. It is NOT
