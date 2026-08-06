@@ -16,10 +16,78 @@ What is already proven, and what is not:
 | **The header permutation and the straps** | `python test/run.py fpga` — the only suite that elaborates `ulx3s_top`; boots through the J1 wires in both seatings, checks J2 against the VGA bit order, and requires a *wrong* SW1 to fail |
 | Every pin is constrained, on the right ball | `python fpga/check_pins.py`, also a CI gate: 59 ports, 59 LOCATEs, all 59 sites diffed against upstream `emard/ulx3s doc/constraints/ulx3s_v20.lpf` (2026-08-02), clock constrained, no Pmod straddling two footprints |
 | **The card writer aims at the right sectors** | `python -m pytest tools/test_sdwrite.py`, also a CI gate: whole-disk targets only, volume and partition paths refused by name. The format was always tested; *where the bytes land* was not, and was wrong — see step 4 |
-| **NOT proven: that this board is a v2.0** | needs the board — see step 1 |
-| **NOT proven: any wire, connector or signal integrity** | needs the board |
-| The flasher exists and runs | `openFPGALoader v1.1.1`, bundled in oss-cad-suite — **not on `PATH`**, load `environment.ps1` first (step 0) |
-| **NOT DONE: the WinUSB driver (Zadig)** | needs the board — Zadig binds to a *connected* device |
+| **ANSWERED: it is a v3.1.8, NOT a v2.0** | silkscreen, read by eye 2026-08-06. 58 of 59 sites are unaffected; `wifi_gpio0` moved L2 → F1 and is fixed in `ulx3s.lpf` |
+| **The clock, LEDs, buttons, DIP switch and onboard audio DAC all work** | first power-up 2026-08-06 — see below |
+| **NOT proven: any Pmod wire or connector** | **J1/J2 ship UNPOPULATED** — nothing can be plugged in until headers are soldered |
+| The flasher works | **`fujprog`**, bundled in oss-cad-suite. Load `environment.ps1` first (step 0) |
+| **NOT NEEDED: Zadig / WinUSB** | `fujprog` reaches the FT231X through FTDI's stock D2XX driver, so **the COM port survives**. `openFPGALoader` would need WinUSB and would destroy it |
+
+## FIRST POWER-UP — 2026-08-06. What the board actually did.
+
+The ULX3S arrived and this checklist was run for real. Everything below is
+observed, not simulated. **The first design this project has ever run on
+hardware.**
+
+| Step | Result |
+| --- | --- |
+| Board revision | **v3.1.8** (silkscreen). ⚠ The FT231X EEPROM string says `ULX3S FPGA 85K v3.0.8` and is **stale factory data** |
+| JTAG | **`IDCODE 0x41113043`** = LFE5U-85F, read off the chip |
+| Configuration | `console.bit` → SRAM in **55.69 s**; status register **`DONE=1`, `FAIL=0`**, no BSE or exec error |
+| **Step 2 PASS** | **all 8 LEDs cycling = the frame counter** — the loader completed its no-card path *and* vsync is pulsing, i.e. video timing is running |
+| Onboard audio | **works** — proven separately with `tune_top.sv` (below) |
+| Steps 3-6 | **BLOCKED**, see below |
+
+### 🔴 The blocker nobody predicted: J1 and J2 ship UNPOPULATED
+
+They are **bare plated through-holes**. Radiona ships the ULX3S without GPIO
+headers so the buyer chooses the type. **No Pmod can be attached to this board
+at all** until 2.54 mm **female** sockets are soldered — female because the
+Cartridge Pmod and both TT Pmods have male pins.
+
+This blocks steps 3-6 here *and* koti's bring-up, since both designs put every
+Pmod on J1. It does **not** block anything above: the whole first power-up ran
+with no header, no Pmod and no card. Parts are logged in `ASIC/SHOPPING.md`.
+
+### 🪤 Traps found the hard way, all of which cost time
+
+- **`fujprog -i` LIES.** It reports `FPGA IDCODE: FFFFFFFF` on a perfectly
+  healthy board, **and exits 0**. It uses the legacy ULX2S pin map, where TDO
+  is DCD; the ULX3S map has TDO on CTS. Programming is completely unaffected.
+  ⛔ Never use `-i` as a health check, and never gate on its exit code.
+  (`fujprog -d` segfaults, `0xC0000005`.)
+- **All eight LEDs dark is a NORMAL state, not a dead board.** `ulx3s_top.sv`
+  has `if (sw[3]) led = pad_btn[7:0]`, so with **DIP switch 4 ON** and no
+  Gamepad Pmod the receiver correctly reports *no buttons* → `0x00`. ⇒ **Set
+  all four DIP switches OFF before reading anything into the LEDs.** `0x00`
+  appears nowhere in the status table below, which is the tell.
+- **`openFPGALoader` cannot reach the board** with FTDI's stock driver — it
+  needs libusb/WinUSB, and fails at `usb_open()`. Binding WinUSB with Zadig
+  would work *and would destroy the COM port*, which is koti's kernel console.
+  Use `fujprog`; it also has `-t` for a terminal, so one tool covers both.
+- **The two rows of "Max frequency" again.** Take the **last**.
+
+### `tune_top.sv` — the bring-up aid that needs no header
+
+`fpga/tune_top.sv` + `fpga/tune.lpf` are a standalone ~200-LUT design, separate
+from the console build (they are deliberately **not** in `sources.txt`). They
+exist because they exercise the one signal path that works on a board with bare
+J1/J2, which is the state this board is in:
+
+```
+yosys -q -p "read_verilog -sv fpga/tune_top.sv; synth_ecp5 -top tune_top -json tune.json"
+nextpnr-ecp5 --85k --package CABGA381 --json tune.json --lpf fpga/tune.lpf --textcfg tune.config --freq 25
+ecppack tune.config tune.bit && fujprog tune.bit
+```
+
+Hold **F1** for a melody, **F2** for a 440 Hz reference tone, the four
+direction buttons for single notes; **DIP 1/2 set volume** (00 = full). `led[0]`
+is a heartbeat, `led[6:1]` mirror the buttons, `led[7]` says a note is
+sounding — so if the audio fails, the LEDs still separate "design not running"
+from "button not arriving" from "oscillator silent".
+
+⚠ Beware `Select-Object -First N` on a nextpnr pipeline in PowerShell: it
+terminates the pipeline and **kills nextpnr mid-run**, printing plausible stats
+while never writing the `.config`. Redirect to a log instead.
 
 ### About that Fmax, because it has been quoted three different ways
 
@@ -190,11 +258,18 @@ Do the volatile load first and get through this checklist with it; commit to
 flash once the board behaves. A bad image in config flash is recoverable
 (reflash it), but it boots on every power-up until you do.
 
+⚠ **Set all four DIP switches OFF first** (away from the side marked `ON`).
+**DIP 4 ON puts the gamepad buttons on the LEDs** (`if (sw[3]) led = pad_btn`),
+and with no Gamepad Pmod that reads as *no buttons* — **all eight LEDs dark**,
+which looks exactly like a dead board and is in fact correct behaviour. `0x00`
+is not in the status table below; that is how you tell.
+
 Expected: the LEDs show a **loader status code** (see the table below), and
 with no card inserted it should settle at **0x82 (`ST_NOCARD`)** and then the
 LEDs start **counting** — the frame counter, which means video timing is
 running. Counting LEDs at this stage is the single best "the design is alive"
 signal, and it needs no Pmod at all.
+✅ **Observed 2026-08-06: the LEDs count.** This step passes on real hardware.
 
 If the LEDs sit at `0x01` forever, the loader is stuck in SD init — that is a
 microSD wiring/revision problem (step 1), not a logic problem.
@@ -252,11 +327,17 @@ Insert the card, press BTN0, and watch the LEDs walk the status codes:
 working, and it is the difference between a one-second boot and a minute of
 needless flash wear.
 
-## 5. Tiny VGA Pmod on J2 — bought 2026-08-02, arrival unconfirmed
+## 5. Tiny VGA Pmod — the SECOND footprint on J1, gp/gn 4-7
 
-Only now add video, on **J2 = gp/gn 4-7** — sites that have never been on
-hardware. **SW2** flips the VGA row mapping the same way SW1 does for the
-cartridge.
+⛔ **NOT the connector silkscreened `J2`.** The ULX3S manual is explicit:
+`J1 GP,GN 0-13`, `J2 GP,GN 14-27`. gp/gn 4-7 is the second Pmod footprint along
+the *same* header the cartridge sits on. This section used to say "J2 = gp/gn
+4-7", which would put the Pmod on gp/gn 14-17 — **pins shared with the onboard
+ADC**. It would plug in happily and produce no picture, and the Pmod would get
+the blame. Corrected 2026-08-06.
+
+Only now add video, on **gp/gn 4-7** — sites that have never been on hardware.
+**SW2** flips the VGA row mapping the same way SW1 does for the cartridge.
 
 What *is* settled without the Pmod: the J2 sites are diffed against upstream
 (`fpga/check_pins.py`), and `test/run.py fpga` checks that `uo_out` reaches

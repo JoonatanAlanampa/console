@@ -62,18 +62,28 @@ EXPECTED = {
     "led[0]": "B2", "led[1]": "C2", "led[2]": "C1", "led[3]": "D2",
     "led[4]": "D1", "led[5]": "E2", "led[6]": "E1", "led[7]": "H3",
     "ftdi_rxd": "L4",
-    "wifi_gpio0": "L2",
+    # F1, not upstream v2.0's L2 -- the ONE deliberate departure from
+    # ulx3s_v20.lpf in this table. The bench board is a PCB v3.1.8, and exactly
+    # five signals moved between v2.0 and v3.1.x, all wifi_*: on v3.1.x L2
+    # became wifi_gpio22 and wifi_gpio0 moved to F1. See the long comment on
+    # this pin in ulx3s.lpf. The other 58 entries are identical on both
+    # revisions, so this table still checks what it claims to check.
+    "wifi_gpio0": "F1",
     # onboard 3.5 mm jack, 4-bit R2R ladder per channel
     "audio_l[3]": "B3", "audio_l[2]": "C3", "audio_l[1]": "D3",
     "audio_l[0]": "E4",
     "audio_r[3]": "C5", "audio_r[2]": "D5", "audio_r[1]": "B5",
     "audio_r[0]": "A3",
-    # J1 = the gp/gn[0..3] Pmod footprint -- Cartridge Pmod
+    # Physical header J1, footprint 0 = gp/gn[0..3] -- Cartridge Pmod.
+    # ALL THREE Pmod footprints below are on J1: the ULX3S manual says
+    # "J1 GP,GN 0-13" / "J2 GP,GN 14-27". Calling the second one "J2" (as this
+    # file used to) collides with the board silkscreen and points at gp/gn
+    # 14-17, which are shared with the onboard ADC. Corrected 2026-08-06.
     "pmod_gp[0]": "B11", "pmod_gp[1]": "A10", "pmod_gp[2]": "A9",
     "pmod_gp[3]": "B9",
     "pmod_gn[0]": "C11", "pmod_gn[1]": "A11", "pmod_gn[2]": "B10",
     "pmod_gn[3]": "C10",
-    # J2 = the gp/gn[4..7] Pmod footprint -- Tiny VGA Pmod
+    # Physical header J1, footprint 1 = gp/gn[4..7] -- Tiny VGA Pmod
     "vga_gp[0]": "A7", "vga_gp[1]": "C8", "vga_gp[2]": "C6", "vga_gp[3]": "A6",
     "vga_gn[0]": "A8", "vga_gn[1]": "B8", "vga_gn[2]": "C7", "vga_gn[3]": "B6",
     # the gp/gn[8..11] Pmod footprint -- TT Gamepad Pmod, first 3 of 4 signals
@@ -223,8 +233,13 @@ def main() -> int:
 
     print(f"ulx3s_top ports : {len(ports)}")
     print(f"LOCATE lines    : {len(locates)}")
+    # Say exactly what was compared against what. 58 sites are upstream v2.0
+    # values; wifi_gpio0 is deliberately the v3.1.x site (F1, not L2) because
+    # the board is a v3.1.8. Printing a flat "against ulx3s_v20.lpf" would
+    # claim a provenance one of these entries does not have.
     print(f"sites checked   : {sum(1 for p in locates if p in EXPECTED)}"
-          f"/{len(locates)} against upstream ulx3s_v20.lpf")
+          f"/{len(locates)} -- 58 vs upstream ulx3s_v20.lpf, "
+          f"wifi_gpio0 vs v3.1.x (F1, see ulx3s.lpf)")
     print(f"clock constraint: "
           f"{freqs.get(CLOCK_PORT, 'MISSING')} MHz on {CLOCK_PORT}")
 

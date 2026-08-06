@@ -5,11 +5,16 @@
 # cartridge bring-up bitstream, so the Cartridge Pmod sits in the SAME J1
 # position it was validated in.
 #
-# Header plan:
-#   J1 (gp/gn 0-3)   Cartridge Pmod   flash + PSRAM + audio   <- SW1 flips rows
-#   J2 (gp/gn 4-7)   Tiny VGA Pmod    RGB222 + syncs          <- SW2 flips rows
-#   gp 8/9/10        SNES controller  LATCH / CLK / DATA
-#   onboard          microSD          SPI mode
+# Header plan. NOTE the Pmod footprints below are ALL on the board's physical
+# J1 connector: the ULX3S manual says "J1 GP,GN 0-13" and "J2 GP,GN 14-27", so
+# gp/gn 0-3, 4-7 and 8-10 are three footprints along ONE header. An earlier
+# version of this file called the second one "J2", which collides with the
+# board's own silkscreen and would send the VGA Pmod to gp/gn 14-17 -- pins
+# that are SHARED WITH THE ONBOARD ADC. Corrected 2026-08-06 at the bench.
+#   J1, footprint 0 (gp/gn 0-3)  Cartridge Pmod  flash + PSRAM + audio  <- SW1
+#   J1, footprint 1 (gp/gn 4-7)  Tiny VGA Pmod   RGB222 + syncs         <- SW2
+#   J1, gp 8/9/10                SNES controller LATCH / CLK / DATA
+#   onboard                      microSD         SPI mode
 #
 # VERIFY BEFORE FIRST POWER: check these sites against the constraint file for
 # YOUR board revision. The gp/gn 0-3 sites are proven by an earlier bitstream;
@@ -80,8 +85,23 @@ IOBUF PORT "led[7]" PULLMODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
 LOCATE COMP "ftdi_rxd" SITE "L4";
 IOBUF  PORT "ftdi_rxd" PULLMODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
 
-# keep the ESP32 booted (it can power-cycle the board otherwise)
-LOCATE COMP "wifi_gpio0" SITE "L2";
+# Keep the ESP32 booted (it can power-cycle the board otherwise).
+#
+# F1, NOT L2 -- and this is the ONE site in this file that deliberately departs
+# from upstream ulx3s_v20.lpf. The board on the bench is a PCB **v3.1.8**
+# (silkscreen, read by eye 2026-08-06; the FT231X EEPROM string still says
+# "v3.0.8" and is stale factory data -- do not trust it). Diffing upstream
+# ulx3s_v20.lpf against doc/constraints/prototype/ulx3s_v316.lpf shows exactly
+# FIVE signals moved between v2.0 and v3.1.x, all of them wifi_*, and this is
+# the only one this design uses:
+#       v2.0 / v3.0.x : L2 = wifi_gpio0
+#       v3.1.x        : L2 = wifi_gpio22, and wifi_gpio0 moved to F1
+# Upstream's own file annotates it: `LOCATE COMP "wifi_gpio22" SITE "L2"; #
+# wifi_gpio0 on v3.0.x`. Left at L2 this line did nothing it claims -- it hung
+# a weak pull-up on an unrelated ESP32 pin while the pin it names sat
+# unconstrained. Harmless either way; the *protection* was simply absent.
+# The other 58 sites are byte-identical across the two revisions.
+LOCATE COMP "wifi_gpio0" SITE "F1";
 IOBUF  PORT "wifi_gpio0" PULLMODE=UP IO_TYPE=LVCMOS33;
 
 # ---- onboard 3.5 mm audio jack (4-bit R2R ladder per channel) ----
