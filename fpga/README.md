@@ -49,15 +49,21 @@ bought**. What is *bought* and what is *in your hand* are still two different
 columns, and this table keeps them apart on purpose — a delivery date is not a
 verification.
 
+✅ **UPDATE 2026-08-06: THE ULX3S ARRIVED, and so did the microSD card, the
+3.5 mm cable and the speakers.** The one row that read "nothing below runs
+without it" is now green, so this checklist has stopped being a plan and
+started being a procedure. Start at step 1 and work down. **The only ❔ left is
+the two TT Pmods** — everything else in the table is physically on the bench.
+
 | Needed for | Bought | In hand |
 | --- | --- | --- |
-| **ULX3S 85F** | ✅ 2026-07-19 | ❌ **not yet arrived** — nothing below runs without it |
+| **ULX3S 85F** | ✅ 2026-07-19 | ✅ **ARRIVED 2026-08-06** — the blocker is gone; everything below is runnable work |
 | **Cartridge Pmod** (steps 3-4, 7) | ✅ | ✅ board #1 passed the pre-power bench check |
 | **Monitor + VGA cable** (step 5) | ✅ | ✅ |
-| **microSD card** (step 4) | ✅ | ❔ confirm it is **microSDHC**, not full-size, not SDXC |
-| **Tiny VGA Pmod** (steps 5, 7) | ✅ | ❔ |
-| **TT Gamepad Pmod** (step 6) | ✅ | ❔ **in stock again as of 2026-08-03** — the out-of-stock worry is closed |
-| **3.5 mm cable + speakers** (step 7) | ✅ | ❔ |
+| **microSD card** (step 4) | ✅ | ✅ **2026-08-06** — SKU is Hama **microSDHC** 32 GB, i.e. the tested path; still worth reading the card face once |
+| **Tiny VGA Pmod** (steps 5, 7) | ✅ | ❔ **still in transit** |
+| **TT Gamepad Pmod** (step 6) | ✅ | ❔ **still in transit** — in stock again as of 2026-08-03, so the out-of-stock worry is closed |
+| **3.5 mm cable + speakers** (step 7) | ✅ | ✅ **2026-08-06** |
 
 The two SNES pads are bought, but on their own they are **not a controller
 path**: they plug into the Gamepad Pmod, and `src/snes_pad.sv` is not
@@ -65,12 +71,12 @@ instantiated anywhere in the harness. See "If the Gamepad Pmod does not turn
 up" below — on an FPGA that is a solvable problem, and it was not solvable on
 silicon, which is why the design looks the way it does.
 
-So the honest reading: **the blocker is now delivery, not money.** Everything
-below is a procedure waiting on boxes. When the ULX3S lands with only the
-cartridge Pmod attached, you get step 2 — LEDs walking the loader status codes
-and then counting frames. That is a real result (the design is alive and video
-timing is running) but it is not a game on a screen; steps 4-6 need the card
-and the two Pmods.
+So the honest reading, as of 2026-08-06: **the ULX3S has landed and the two TT
+Pmods have not.** That is exactly the case this section was written for — with
+the board plus the cartridge Pmod you already have, you get step 2 today: LEDs
+walking the loader status codes and then counting frames. That is a real result
+(the design is alive and video timing is running) but it is not a game on a
+screen; steps 4-6 need the card and the two Pmods.
 
 `ui_in` is driven from the gamepad receiver and an absent Pmod reads as *no
 buttons* rather than as garbage (tested — `test/run.py fpga`), so a missing
