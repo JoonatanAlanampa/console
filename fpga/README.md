@@ -66,6 +66,52 @@ with no header, no Pmod and no card. Parts are logged in `ASIC/SHOPPING.md`.
   Use `fujprog`; it also has `-t` for a terminal, so one tool covers both.
 - **The two rows of "Max frequency" again.** Take the **last**.
 
+## ✅ RUNG 0 PASSED — **HDMI WORKS. The Tiny VGA Pmod is off the video critical path.**
+
+**New scope, user directive 2026-08-06: a console that needs no Pmod at all** —
+FPGA BRAM instead of the cartridge Pmod, the onboard 3.5 mm jack instead of the
+Pmod's, **GPDI/HDMI instead of the Tiny VGA Pmod**, and the ULX3S buttons
+instead of the Gamepad Pmod. ⛔ **Nothing is deleted.** Every Pmod path stays,
+behind a build-time flag, so the Pmods can still be tested when they arrive.
+
+| Rung | What | State |
+| --- | --- | --- |
+| **0** | standalone GPDI colour bars, no SoC | ✅ **PASSED on hardware 2026-08-06** |
+| 1 | BRAM memory so the SoC boots `game.bin` (36 KB into 466 KB free) | not started — **gates anything playable** |
+| 2 | UP/DOWN/LEFT/RIGHT + B1/B2 → `ui_in` | not started |
+| 3 | GPDI fed from the real video engine | not started |
+
+ⓘ **Audio needed no work at all.** `ulx3s_top.sv:186` already drives `audio_l/r`
+from the same `audio_bit` as the cartridge Pmod — both jacks are live at once,
+by design. Confirmed audibly on hardware.
+
+`fpga/gpdi_test_top.sv` + `fpga/gpdi.lpf` + `fpga/pll_25_125.v`: 640x480@60 DVI
+colour bars, **458 LUT4 / 207 FF / 1 PLL**, `149.95 MHz` post-route against a
+125 MHz requirement. Build exactly like `tune_top.sv` below, with
+`pll_25_125.v` added to the yosys `read_verilog` line and `-top gpdi_test_top`.
+
+**What it retired:** the ULX3S drives TMDS from **LVCMOS33D pseudo-differential
+pins, which is not spec-compliant**, and a monitor is entitled to refuse it.
+This one does not — colour bars, border and the walking marker all appeared.
+That was the whole point of doing rung 0 before rungs 1-3.
+
+Still true, and unretired: this is **DVI signalling on an HDMI connector** —
+video only, no audio islands. Console's audio goes out the 3.5 mm jack anyway.
+
+### Two things this cost, worth not re-learning
+
+- **A clock ENABLE does not relax static timing.** The TMDS encoder only
+  advances every 5th clock, but every path in it is still constrained at the
+  full 125 MHz. First build: **90.28 MHz, FAIL.** Pipelining the encoder into
+  three stages got it to 118.53 MHz — still failing.
+- **The real cost was routing, not logic: 1.42 ns logic against 7.02 ns
+  routing.** This design occupies a tiny corner of an 85F, so `pce` — a net
+  every flop needs — fanned out from (95,9) to (9,13), **5.30 ns on one hop**.
+  Registering `pce` (and synchronising `rst`) turns that long wire into
+  flop-to-flop with a whole period to cross: **149.95 MHz, PASS.** More
+  pipelining would have kept optimising the wrong thing. ⇒ **Read the critical
+  path report before adding pipeline stages.**
+
 ### `tune_top.sv` — the bring-up aid that needs no header
 
 `fpga/tune_top.sv` + `fpga/tune.lpf` are a standalone ~200-LUT design, separate
