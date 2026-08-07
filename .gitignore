@@ -6,6 +6,11 @@ tools/__pycache__/
 test/results*.xml
 test/*.fst
 test/*.vcd
+# tb_bram_cart.v is plain Verilog run straight from the repo ROOT (iverilog +
+# vvp, no cocotb), so its dump and binary land here rather than under test/.
+*.fst
+*.vcd
+*.vvp
 # fpga
 fpga/build/
 # build artifacts (game.bin IS committed: test/test_rehearse.py loads it)
