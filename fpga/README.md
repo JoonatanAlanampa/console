@@ -78,12 +78,35 @@ behind a build-time flag, so the Pmods can still be tested when they arrive.
 | --- | --- | --- |
 | **0** | standalone GPDI colour bars, no SoC | ✅ **PASSED on hardware 2026-08-06** |
 | **1** | GPDI fed from the real video engine | ✅ **PASSED on hardware 2026-08-07** |
-| 2 | BRAM memory so the SoC boots `game.bin` (36 KB into 466 KB free) | not started — **gates anything playable** |
-| 3 | UP/DOWN/LEFT/RIGHT + B1/B2 → `ui_in` | not started |
+| **2** | BRAM memory so the SoC boots `game.bin` | ✅ **PASSED on hardware 2026-08-07** |
+| **3** | UP/DOWN/LEFT/RIGHT + B1/B2 → `ui_in` | ✅ **PASSED on hardware 2026-08-07** |
+
+## 🎮 THE CONSOLE IS PLAYABLE WITH NO PMOD ATTACHED (2026-08-07)
+
+Picture on the GPDI socket, code and data in the 85F's own block RAM, sound out
+the onboard 3.5 mm jack, controls on the board's six buttons. Observed on the
+bench: the game's brick border, scattered tiles and four ship sprites on the
+monitor; all four direction buttons moving the player sprite; FIRE1 playing a
+tone whose pitch follows it.
+
+**8 % LUT4, 95 of 208 block RAMs, 126.20 MHz post-route on the 125 MHz TMDS
+clock and 61.47 MHz on the 25 MHz SoC clock.**
+
+⚠ That TMDS margin is **1 %**, against 140 MHz on the build one commit earlier.
+Nothing changed in the video path; the difference is placement — a small block
+that must run at 125 MHz inside a design that mostly runs at 25 MHz gets
+scattered differently by every edit. It is deterministic for a given input, so
+CI will not flip randomly, but a future change *can* tip it under. If it does,
+read the critical path before adding pipeline stages (see rung 0's lesson): the
+last two times, the cost was routing, not logic.
+
+`-Pmod` still builds the original Cartridge-Pmod + Gamepad-Pmod design. Nothing
+was deleted, only made selectable, and CI synthesises that variant too — else
+those branches would rot silently until the day headers get soldered on.
 
 ⚠ Rungs 1 and 3 swapped places on 2026-08-07 (user directive: HDMI, then memory,
-then buttons). Video before memory is also the better ladder — it means the
-memory rung can be *watched* rather than inferred from LEDs.
+then buttons). Video before memory is also the better ladder — it meant the
+memory rung could be *watched* rather than inferred from LEDs.
 
 ⓘ **Audio needed no work at all.** `ulx3s_top.sv:186` already drives `audio_l/r`
 from the same `audio_bit` as the cartridge Pmod — both jacks are live at once,
@@ -160,8 +183,18 @@ marker, and the LED status byte reading healthy.
 | `led[7]` | PLL locked | steady ON |
 | `led[6]` | `dvi_tx` phase watchdog (sticky) | OFF |
 | `led[5]` | timing-replica mismatch (sticky) | OFF |
-| `led[4]` | the SoC has drawn a non-black pixel | OFF until software enables video |
-| `led[3:0]` | frame counter | counting — `led[0]` shimmers at 60 Hz |
+| `led[4]` | the SoC has drawn a non-black pixel | ON once the game runs |
+| `led[3]` | `bram_cart` saw an unimplemented opcode (sticky) | OFF |
+| `led[2:0]` | frame counter | counting — `led[0]` shimmers at 60 Hz |
+
+In the `-Pmod` build there is no fabric cartridge to report, so `led[3]` returns
+to the frame counter (`led[3:0]`) and the loader's status byte takes over the
+whole display until it releases the bus. With `CART_BRAM` that bad-opcode bit is
+worth more than a fourth frame bit — it is the one that told us the SD loader
+was still on the bus.
+
+**DIP 4** overrides all of it and shows `ui_in` — the eight button bits the chip
+is actually being handed.
 
 ### 🪤 A status LED that has not acquired yet is a status LED that always lies
 
@@ -176,6 +209,96 @@ phase and checks every edge after it against that.
 give-away was the contradiction — a fault lamp lit over a working picture — and
 the cheapest possible fix confirmed it, because a genuine off-cadence event
 still latches the same bit.
+
+## ✅ RUNG 2 — **THE CARTRIDGE, IN FABRIC** (`fpga/bram_cart.sv`)
+
+J1 is a row of bare holes, so the memory the SoC boots from lives in block RAM.
+`bram_cart` is a QSPI **device** sitting where the Pmod would, on the same eight
+`uio` wires — not a shortcut. The chip still boots by XIP from "flash" 0 and the
+video engine still races the beam against the same shared bus through the same
+arbiter. An `ifdef` swapping `qspi_ctrl` for a BRAM port would have been less
+work and would have meant the arbiter and the race-the-beam fetch — which are
+*the engineering of this project* — never ran on hardware at all.
+
+It implements `03h` read and `02h` write in 1-bit mode, the whole set the
+console uses (`cfg` resets to 0 and `sw/game.c:89` leaves it there). Everything
+else raises `bad_cmd`, on `led[3]`. A model that silently returned zeroes for an
+opcode it did not understand would look exactly like working hardware running a
+broken program.
+
+### Three things that had to be right
+
+- **`03h` has no dummy cycles.** The controller captures the first data bit in
+  the cycle *after* the last address bit, so a BRAM read issued then arrives one
+  edge late. The arrays are therefore 16 bits wide — two byte lanes — and the
+  read is issued one edge **early**, when `addr[23:1]` is known and only
+  `addr[0]` is still in flight. Both candidates arrive in time and `addr[0]`
+  picks between them. A real W25Q128 does the same thing with an async array.
+- **Each array must own its output register.** Written as one register fed by a
+  mux of two memory reads, neither memory can absorb the flop, so yosys needs an
+  asynchronous read port, `DP16KD` has none, and all four arrays fall back to
+  distributed LUT RAM: **1 DP16KD, 16468 `TRELLIS_DPR16X4`, 74840 LUT4** against
+  an 85F that has 83640. Register first, mux afterwards → **94 DP16KD, 558 LUT4**.
+- **Address aliasing is a feature.** Each device decodes only as many low bits as
+  it has bytes, so the 8 MB PSRAM window aliases onto 128 KiB. That is what lets
+  **one** `sw/game.bin` run on both the real cartridge and this model: `crt0`'s
+  `sp = 0x01800000` first pushes to `0x017FFFFC`, which aliases to the top of the
+  window and grows down toward the tile map — exactly the layout `link.ld`
+  describes, 64× smaller. No software change, no FPGA-only binary to drift.
+
+### 🪤 Two traps, both found on hardware
+
+- **Gating the loader's reset is not the same as taking it off the bus.** With
+  `CART_BRAM` the SoC runs from cycle one, so its opening flash fetch happened
+  while `ldr_owns` was still high: the model saw the *loader's* chip select, then
+  saw CS drop mid-stream and decoded the fragment as an opcode. `bad_cmd` lit
+  beside a game that had booted perfectly — i.e. it went right by luck, which is
+  the least durable way for a race to go.
+- **yosys unrolls `initial` loops.** A two-line loop zeroing 65536 words turned a
+  40-second synthesis into one that had not finished in five minutes. It is now
+  behind `` `ifndef SYNTHESIS ``; the ECP5 powers block RAM up zeroed anyway.
+
+### Testing it
+
+`test/tb_bram_cart.v` drives the **real** `src/qspi_ctrl.sv` against the model
+and checks every case where the one-edge-early read could go wrong: odd start
+addresses, bursts crossing 16-bit words, the 96-byte burst the arbiter issues,
+the pattern table, and read-after-write at both lane parities.
+
+```
+python tools/mkhex.py sw/game.bin fpga/build/game_lo.hex fpga/build/game_hi.hex
+iverilog -g2012 -o tb_bram_cart.vvp -s tb_bram_cart \
+    src/qspi_ctrl.sv fpga/bram_cart.sv test/tb_bram_cart.v && vvp tb_bram_cart.vvp
+```
+
+Run it **from the repo root** — `$readmemh` paths are relative, and a `$readmemh`
+that finds nothing is silent: the array stays X and the symptom is a CPU that
+looks broken. It is plain Verilog rather than cocotb so it runs on the Windows
+host too, and that paid immediately: it caught a *bench* bug first, where driving
+`we` on the same edge the controller samples made the controller latch the
+previous transaction's value — sending `03h` for the write and `02h` for the
+read. The model was faithfully answering the wrong question.
+
+⇒ **Never drive stimulus on the edge the DUT samples on.** It does not fail
+loudly; it fails as a DUT that looks wrong.
+
+## ✅ RUNG 3 — the board's own buttons
+
+`btn[1]`=FIRE1→**B**, `btn[2]`=FIRE2→**Y**, `btn[3..6]`=**UP/DOWN/LEFT/RIGHT**.
+They drive the *same* eight `ui_in` bits the Gamepad Pmod does, so the chip's
+decode, the register map and `sw/console.h` are untouched — a different source
+for `ui_in`, not a different interface. Select and Start have no button on this
+board and read 0; `btn[0]` is PWR and is the reset.
+
+`btn[1..6]` are `PULLMODE=DOWN`, so open reads 0 and pressed reads 1 — no
+inversion. Two synchroniser flops first, because these are asynchronous
+mechanical inputs and a metastable sample reaching the CPU's MMIO read is not
+something anyone would diagnose as a button; then a ~2.6 ms sampling tick as a
+debounce cheap enough to be obviously correct.
+
+**DIP 4 now shows `ui_in` itself**, whichever source it came from — so "press a
+button, watch an LED" separates a dead button from a dead decode from a dead
+game, for the onboard buttons exactly as it did for the Pmod.
 
 ### `tune_top.sv` — the bring-up aid that needs no header
 
