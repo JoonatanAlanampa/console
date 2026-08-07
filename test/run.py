@@ -53,6 +53,11 @@ SUITES = {
             VENDOR / "uart_tx.sv", VENDOR / "gamepad_pmod.v",
             FPGA / "spi_master.sv", FPGA / "sd_spi.sv", FPGA / "spi_flash.sv",
             FPGA / "sd_loader.sv", FPGA / "gamepad_ulx3s.sv",
+            # HDMI. sim_prims.v supplies behavioural EHXPLLL/ODDRX1F and is
+            # deliberately absent from fpga/sources.txt -- synthesis takes the
+            # real hard blocks from the ECP5 library. See its header.
+            FPGA / "sim_prims.v", FPGA / "pll_25_125.v",
+            FPGA / "tmds_encoder.sv", FPGA / "dvi_tx.sv",
             FPGA / "ulx3s_top.sv",
             TEST_DIR / "tb_fpga.v",
         ],

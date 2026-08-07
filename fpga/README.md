@@ -77,9 +77,13 @@ behind a build-time flag, so the Pmods can still be tested when they arrive.
 | Rung | What | State |
 | --- | --- | --- |
 | **0** | standalone GPDI colour bars, no SoC | ✅ **PASSED on hardware 2026-08-06** |
-| 1 | BRAM memory so the SoC boots `game.bin` (36 KB into 466 KB free) | not started — **gates anything playable** |
-| 2 | UP/DOWN/LEFT/RIGHT + B1/B2 → `ui_in` | not started |
-| 3 | GPDI fed from the real video engine | not started |
+| **1** | GPDI fed from the real video engine | ✅ **PASSED on hardware 2026-08-07** |
+| 2 | BRAM memory so the SoC boots `game.bin` (36 KB into 466 KB free) | not started — **gates anything playable** |
+| 3 | UP/DOWN/LEFT/RIGHT + B1/B2 → `ui_in` | not started |
+
+⚠ Rungs 1 and 3 swapped places on 2026-08-07 (user directive: HDMI, then memory,
+then buttons). Video before memory is also the better ladder — it means the
+memory rung can be *watched* rather than inferred from LEDs.
 
 ⓘ **Audio needed no work at all.** `ulx3s_top.sv:186` already drives `audio_l/r`
 from the same `audio_bit` as the cartridge Pmod — both jacks are live at once,
@@ -88,7 +92,10 @@ by design. Confirmed audibly on hardware.
 `fpga/gpdi_test_top.sv` + `fpga/gpdi.lpf` + `fpga/pll_25_125.v`: 640x480@60 DVI
 colour bars, **458 LUT4 / 207 FF / 1 PLL**, `149.95 MHz` post-route against a
 125 MHz requirement. Build exactly like `tune_top.sv` below, with
-`pll_25_125.v` added to the yosys `read_verilog` line and `-top gpdi_test_top`.
+`pll_25_125.v` **and `tmds_encoder.sv`** added to the yosys `read_verilog` line
+and `-top gpdi_test_top`. (The encoder moved out of `gpdi_test_top.sv` when
+rung 1 needed the same one — two copies of a DC-balance state machine is a bug
+waiting for someone to fix only one of them. Behaviour is unchanged.)
 
 **What it retired:** the ULX3S drives TMDS from **LVCMOS33D pseudo-differential
 pins, which is not spec-compliant**, and a monitor is entitled to refuse it.
@@ -111,6 +118,64 @@ video only, no audio islands. Console's audio goes out the 3.5 mm jack anyway.
   flop-to-flop with a whole period to cross: **149.95 MHz, PASS.** More
   pipelining would have kept optimising the wrong thing. ⇒ **Read the critical
   path report before adding pipeline stages.**
+
+## ✅ RUNG 1 PASSED — **THE CONSOLE'S OWN VIDEO IS ON THE HDMI MONITOR** (2026-08-07)
+
+`console.bit` now drives the GPDI socket from the same `uo_out` bits that feed
+the Tiny VGA Pmod. Both outputs are live at once; nothing was removed. Observed
+on the bench: eight colour bars, the 2-pixel border, the per-frame walking
+marker, and the LED status byte reading healthy.
+
+**135.87 MHz** post-route on the 125 MHz TMDS clock and **61.97 MHz** on the
+25 MHz SoC clock — so HDMI cost about 2 MHz of the console's own margin
+(64.27 → 61.97) and 467 LUT4 (6401 → 6868, 8 % of the 85F).
+
+### The three things between `uo_out` and a monitor
+
+1. **`de` does not exist on a pin.** The chip spends all eight outputs on
+   RGB222 + syncs, and DVI needs display-enable to know when to send control
+   words. It cannot be recovered from the syncs, because a black visible pixel
+   and a porch pixel are the same eight bits. So `ulx3s_top` runs a **second
+   `vga_timing`** on the same clock and the same reset as the one inside the
+   SoC. Identical counters released from identical resets stay in lockstep for
+   ever — and `led[5]` is the standing proof, latching high if the replica's
+   syncs ever disagree with the chip's pins. It has stayed dark.
+2. **The two clocks are phase-locked but separate.** The SoC closes at 62 MHz
+   and cannot move into the 125 MHz shift domain, so `dvi_tx.sv` *measures* the
+   offset instead of assuming it: a flop toggles once per pixel, two flops in
+   the shift domain sample it, and the edge that comes out lands `pce` in the
+   middle of the pixel. Nothing depends on the PLL's CPHASE, so retuning the
+   PLL cannot silently break the picture.
+3. **Something to look at before there is a game.** `video_en` resets to 0
+   (`src/sysregs.sv`), so until software writes SYSCTL the console outputs black
+   *on purpose* — and "black screen, syncs fine" is indistinguishable from half
+   a dozen real faults. The harness therefore draws a test card until the SoC
+   emits its first non-black pixel, then gets out of the way permanently.
+   Nothing to set; `led[4]` is the handover.
+
+### The LED status byte
+
+| bit | meaning | healthy |
+| --- | --- | --- |
+| `led[7]` | PLL locked | steady ON |
+| `led[6]` | `dvi_tx` phase watchdog (sticky) | OFF |
+| `led[5]` | timing-replica mismatch (sticky) | OFF |
+| `led[4]` | the SoC has drawn a non-black pixel | OFF until software enables video |
+| `led[3:0]` | frame counter | counting — `led[0]` shimmers at 60 Hz |
+
+### 🪤 A status LED that has not acquired yet is a status LED that always lies
+
+The phase watchdog lit on the very first hardware run, next to a **perfect**
+picture. It was not measuring the clock ratio; it was measuring reset phase.
+The mod-5 counter free-ran from zero while reset released at an arbitrary point
+between pixel edges, so the first edge arrived at a random count and latched the
+fault essentially every time. `wd_armed` now lets the first edge *define* the
+phase and checks every edge after it against that.
+
+⇒ Any counter that judges a periodic event must acquire before it judges. The
+give-away was the contradiction — a fault lamp lit over a working picture — and
+the cheapest possible fix confirmed it, because a genuine off-cadence event
+still latches the same bit.
 
 ### `tune_top.sv` — the bring-up aid that needs no header
 

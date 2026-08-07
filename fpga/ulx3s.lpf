@@ -213,3 +213,25 @@ IOBUF PORT "sd_d[1]" PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
 IOBUF PORT "sd_d[2]" PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
 IOBUF PORT "sd_d[3]" PULLMODE=UP   IO_TYPE=LVCMOS33 DRIVE=4;
 IOBUF PORT "sd_cdn"  PULLMODE=UP   IO_TYPE=LVCMOS33;
+
+# ---- onboard GPDI/HDMI ----
+# Sites are byte-identical between upstream ulx3s_v20.lpf and
+# doc/constraints/prototype/ulx3s_v316.lpf, so they are correct on the v3.1.8
+# board on the bench; rung 0 (fpga/gpdi.lpf) drove a real monitor through them.
+#
+# Only the _p pin of each pair is declared. IO_TYPE=LVCMOS33D makes the ECP5
+# drive the paired _n site with the complement, so declaring gpdi_dn as well
+# would put a second driver on the same pair.
+#
+# The 125 MHz shift clock needs no FREQUENCY line here: it comes out of the PLL
+# in fpga/pll_25_125.v, whose FREQUENCY_PIN_CLKOS attribute nextpnr reads to
+# constrain the derived clock. Constraining it twice is how you get a design
+# that reports PASS against the looser of two numbers.
+LOCATE COMP "gpdi_dp[0]" SITE "A16";   # Blue
+LOCATE COMP "gpdi_dp[1]" SITE "A14";   # Green
+LOCATE COMP "gpdi_dp[2]" SITE "A12";   # Red
+LOCATE COMP "gpdi_dp[3]" SITE "A17";   # Clock
+IOBUF PORT "gpdi_dp[0]" IO_TYPE=LVCMOS33D DRIVE=4;
+IOBUF PORT "gpdi_dp[1]" IO_TYPE=LVCMOS33D DRIVE=4;
+IOBUF PORT "gpdi_dp[2]" IO_TYPE=LVCMOS33D DRIVE=4;
+IOBUF PORT "gpdi_dp[3]" IO_TYPE=LVCMOS33D DRIVE=4;

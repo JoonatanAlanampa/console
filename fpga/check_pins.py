@@ -93,6 +93,13 @@ EXPECTED = {
     "sd_clk": "H2", "sd_cmd": "J1",
     "sd_d[0]": "J3", "sd_d[1]": "H1", "sd_d[2]": "K1", "sd_d[3]": "K2",
     "sd_cdn": "N5",
+    # onboard GPDI/HDMI. Only the _p pin of each pair is a port -- LVCMOS33D
+    # drives the paired _n site with the complement, so there is deliberately no
+    # gpdi_dn to locate, and adding one would be a second driver on the pair.
+    # These four sites are the ones rung 0 drove a real monitor through, and
+    # they are byte-identical between upstream v2.0 and v3.1.6.
+    "gpdi_dp[0]": "A16", "gpdi_dp[1]": "A14",
+    "gpdi_dp[2]": "A12", "gpdi_dp[3]": "A17",
 }
 
 # Which upstream gp/gn index each header port occupies. Used only to prove no
@@ -233,12 +240,16 @@ def main() -> int:
 
     print(f"ulx3s_top ports : {len(ports)}")
     print(f"LOCATE lines    : {len(locates)}")
-    # Say exactly what was compared against what. 58 sites are upstream v2.0
-    # values; wifi_gpio0 is deliberately the v3.1.x site (F1, not L2) because
-    # the board is a v3.1.8. Printing a flat "against ulx3s_v20.lpf" would
-    # claim a provenance one of these entries does not have.
-    print(f"sites checked   : {sum(1 for p in locates if p in EXPECTED)}"
-          f"/{len(locates)} -- 58 vs upstream ulx3s_v20.lpf, "
+    # Say exactly what was compared against what. All but one site is an
+    # upstream v2.0 value; wifi_gpio0 is deliberately the v3.1.x site (F1, not
+    # L2) because the board is a v3.1.8. Printing a flat "against
+    # ulx3s_v20.lpf" would claim a provenance one of these entries does not
+    # have. The count is COMPUTED, not typed: it was hardcoded at 58 and went
+    # stale the moment GPDI added four ports, which is the exact failure mode
+    # this file exists to prevent.
+    n_checked = sum(1 for p in locates if p in EXPECTED)
+    print(f"sites checked   : {n_checked}"
+          f"/{len(locates)} -- {n_checked - 1} vs upstream ulx3s_v20.lpf, "
           f"wifi_gpio0 vs v3.1.x (F1, see ulx3s.lpf)")
     print(f"clock constraint: "
           f"{freqs.get(CLOCK_PORT, 'MISSING')} MHz on {CLOCK_PORT}")

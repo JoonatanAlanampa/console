@@ -54,6 +54,13 @@ module ulx3s_top (
     output logic [3:0] vga_gp,
     output logic [3:0] vga_gn,
 
+    // Onboard GPDI/HDMI socket. Carries the SAME picture as the VGA Pmod, from
+    // the same uo_out bits — it does not replace it. This is the path that
+    // needs no Pmod and therefore no soldered header, which is why it is the
+    // one the console is brought up on. Only the _p pins are declared;
+    // LVCMOS33D drives each _n site with the complement.
+    output wire  [3:0] gpdi_dp,
+
     // Onboard 3.5 mm jack (4-bit R2R ladder per channel). This carries the
     // SAME audio as the cartridge Pmod's amp+jack — it does not replace it.
     output logic [3:0] audio_l,
@@ -81,6 +88,23 @@ module ulx3s_top (
 
   wire por_done = &por;
   wire rst      = !(btn[0] && por_done);     // BTN0 (PWR) is active low
+
+  // ------------------------------------------------------- HDMI shift clock
+  // 125 MHz for the TMDS serialisers: 10 bits per pixel / 2 per DDR clock = 5
+  // clocks, 5 x 25 MHz. The SoC stays on the raw 25 MHz oscillator — it closes
+  // at 64 MHz and would not survive being moved into the shift domain — so the
+  // two clocks are phase-locked but separate, which dvi_tx.sv handles by
+  // measuring their offset rather than assuming one.
+  wire clk_shift, pll_lock;
+  pll_25_125 pll (.clkin(clk_25mhz), .clkout0(clk_shift), .locked(pll_lock));
+
+  // Reset out of a FLOP in the shift domain, never straight off a pad through a
+  // LUT: rung 0 measured 5.3 ns on one such hop across the die, against an 8 ns
+  // period. Deliberately NOT gated on ldr_done — the video link keeps running
+  // while the SoC is held in reset, so the monitor holds its lock.
+  logic [1:0] rst_sh_q;
+  always_ff @(posedge clk_shift) rst_sh_q <= {rst_sh_q[0], rst || !pll_lock};
+  wire rst_shift = rst_sh_q[1];
 
   // ------------------------------------------------------- microSD loader
   logic ldr_sd_cs_n, ldr_sd_sck, ldr_sd_mosi;
@@ -211,7 +235,7 @@ module ulx3s_top (
     assign vga_gn[n] = uo_out[ni];
   end endgenerate
 
-  // ------------------------------------------------------- status LEDs
+  // ----------------------------------------------------------- frame counter
   // Tiny VGA Pmod bit order is {HSYNC,B0,G0,R0,VSYNC,B1,G1,R1}, so uo_out[3]
   // is VSYNC — one pulse per frame, i.e. a free liveness signal.
   wire vsync = uo_out[3];
@@ -224,13 +248,129 @@ module ulx3s_top (
     else if (vsync && !vsync_q)     frames <= frames + 8'd1;
   end
 
+  // ------------------------------------------------------------------- HDMI
+  // The console's picture, unchanged, on the GPDI socket. Three things sit
+  // between uo_out and a monitor:
+  //
+  // 1. `de`. The chip has eight output pins and spends every one of them on
+  //    RGB222 + syncs, so display-enable never reaches a pad — and DVI needs
+  //    it, to know when to send control words instead of pixels. It cannot be
+  //    recovered from the syncs, because a black visible pixel and a porch
+  //    pixel are the same eight bits. So a SECOND vga_timing runs here, on the
+  //    same clock and the same reset as the one inside the SoC. Identical
+  //    counters released from identical resets stay in lockstep for ever, and
+  //    `sync_err` below is the standing proof that these two do.
+  // 2. Colour depth: RGB222 -> 8 bits per channel by REPLICATION, so 2'b11
+  //    becomes 8'hFF and not 8'h03.
+  // 3. Something to look at before there is a game. `video_en` resets to 0
+  //    (src/sysregs.sv), so until software writes SYSCTL the console outputs
+  //    black deliberately — and "black screen, syncs fine" is indistinguishable
+  //    from half a dozen real faults. So the harness draws a test card until
+  //    the SoC emits its first non-black pixel and then gets out of the way,
+  //    permanently. Nothing to set; the LEDs say which of the two is on screen.
+  wire soc_rst = ~soc_rst_n;
+
+  wire       rep_de, rep_hs, rep_vs;
+  wire [9:0] rep_x, rep_y;
+
+  vga_timing rep (
+      .clk (clk_25mhz), .rst (soc_rst),
+      .hsync (rep_hs), .vsync (rep_vs), .de (rep_de),
+      .x (rep_x), .y (rep_y),
+      .line_fetch (), .next_y (), .frame_start (), .pre_line ()
+  );
+
+  // Sticky: one disagreeing cycle is enough to make `de` a lie, and a `de` that
+  // is off by even a pixel shows up as a picture that is subtly shifted or torn
+  // — a symptom nobody would attribute to this replica without being told.
+  logic sync_err;
+  always_ff @(posedge clk_25mhz)
+    if (soc_rst)                                          sync_err <= 1'b0;
+    else if (rep_hs != uo_out[7] || rep_vs != uo_out[3])  sync_err <= 1'b1;
+
+  wire [1:0] soc_r = {uo_out[0], uo_out[4]};
+  wire [1:0] soc_g = {uo_out[1], uo_out[5]};
+  wire [1:0] soc_b = {uo_out[2], uo_out[6]};
+
+  logic soc_drew;
+  always_ff @(posedge clk_25mhz)
+    if (soc_rst)                                soc_drew <= 1'b0;
+    else if (rep_de && |{soc_r, soc_g, soc_b})  soc_drew <= 1'b1;
+
+  // The test card: the same eight bars, 2-pixel border and per-frame walking
+  // marker that rung 0 put on this monitor, redrawn from the replica's raster
+  // so that it also exercises the replica. Border = the whole visible box
+  // arrives; marker = frames are advancing, not one still image being held.
+  logic [2:0] bar;
+  always_comb begin
+    if      (rep_x < 10'd80)  bar = 3'd0;
+    else if (rep_x < 10'd160) bar = 3'd1;
+    else if (rep_x < 10'd240) bar = 3'd2;
+    else if (rep_x < 10'd320) bar = 3'd3;
+    else if (rep_x < 10'd400) bar = 3'd4;
+    else if (rep_x < 10'd480) bar = 3'd5;
+    else if (rep_x < 10'd560) bar = 3'd6;
+    else                      bar = 3'd7;
+  end
+
+  logic [1:0] br, bg, bb;
+  always_comb begin
+    case (bar)
+      3'd0:    {br, bg, bb} = 6'b11_11_11;   // white
+      3'd1:    {br, bg, bb} = 6'b11_11_00;   // yellow
+      3'd2:    {br, bg, bb} = 6'b00_11_11;   // cyan
+      3'd3:    {br, bg, bb} = 6'b00_11_00;   // green
+      3'd4:    {br, bg, bb} = 6'b11_00_11;   // magenta
+      3'd5:    {br, bg, bb} = 6'b11_00_00;   // red
+      3'd6:    {br, bg, bb} = 6'b00_00_11;   // blue
+      default: {br, bg, bb} = 6'b00_00_00;   // black
+    endcase
+  end
+
+  wire card_hi = (rep_x < 10'd2) || (rep_x >= 10'd638) ||
+                 (rep_y < 10'd2) || (rep_y >= 10'd478) ||
+                 (rep_y[7:0] == frames);
+  wire [1:0] card_r = card_hi ? 2'b11 : br;
+  wire [1:0] card_g = card_hi ? 2'b11 : bg;
+  wire [1:0] card_b = card_hi ? 2'b11 : bb;
+
+  wire [1:0] px_r = soc_drew ? soc_r : card_r;
+  wire [1:0] px_g = soc_drew ? soc_g : card_g;
+  wire [1:0] px_b = soc_drew ? soc_b : card_b;
+
+  wire phase_err;
+
+  // Syncs come from the CHIP's own pins, not from the replica — the replica
+  // supplies `de` and nothing else, so what reaches the monitor is the SoC's
+  // raster and sync_err is what says the two agree.
+  dvi_tx dvi (
+      .clk_pixel (clk_25mhz),
+      .clk_shift (clk_shift),
+      .rst_shift (rst_shift),
+      .r ({4{px_r}}), .g ({4{px_g}}), .b ({4{px_b}}),
+      .hsync (uo_out[7]), .vsync (uo_out[3]), .de (rep_de),
+      .gpdi_dp (gpdi_dp), .phase_err (phase_err)
+  );
+
+  // ------------------------------------------------------- status LEDs
+  // Default display, the one to read on the bench:
+  //
+  //   led[7]  PLL locked                       steady ON  = good
+  //   led[6]  dvi_tx phase error (sticky)      OFF        = 5 shift clocks/pixel
+  //   led[5]  timing replica mismatch (sticky) OFF        = `de` is trustworthy
+  //   led[4]  the SoC has drawn a pixel        OFF until software enables video
+  //   led[3:0] frame counter                   blinking   = video is running
+  //
+  // So the healthy pre-software state is led[7] on, [6:4] off, [3:0] counting,
+  // and the monitor showing the test card. led[4] lighting is the handover.
   always_comb begin
     // SW4 = gamepad bring-up aid. The Pmod is a black box with no cable to
     // meter, so "press B, watch LED0" is the only cheap way to prove the
     // controller path end to end before trusting it in a game.
     if (sw[3])                     led = pad_btn[7:0];
     else if (ldr_err || !ldr_done) led = ldr_status;   // loader diagnostics
-    else                           led = frames;       // blinking = video alive
+    else                           led = {pll_lock, phase_err, sync_err,
+                                          soc_drew, frames[3:0]};
   end
 
 endmodule

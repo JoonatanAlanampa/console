@@ -39,9 +39,15 @@ vendor/uart_tx.sv
 vendor/gamepad_pmod.v
 
 # ---- harness only: no silicon pin exists for any of this ----
+# The GPDI/HDMI transmitter is harness-only for the same reason the SD loader
+# is: the chip's eight output pins are all spent on RGB222 + syncs, so the
+# 125 MHz PLL, the TMDS encoders and the serialisers can only exist out here.
 fpga/gamepad_ulx3s.sv
 fpga/spi_master.sv
 fpga/sd_spi.sv
 fpga/spi_flash.sv
 fpga/sd_loader.sv
+fpga/pll_25_125.v
+fpga/tmds_encoder.sv
+fpga/dvi_tx.sv
 fpga/ulx3s_top.sv
