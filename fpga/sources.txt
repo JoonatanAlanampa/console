@@ -47,6 +47,7 @@ fpga/spi_master.sv
 fpga/sd_spi.sv
 fpga/spi_flash.sv
 fpga/sd_loader.sv
+fpga/bram_cart.sv
 fpga/pll_25_125.v
 fpga/tmds_encoder.sv
 fpga/dvi_tx.sv

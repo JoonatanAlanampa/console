@@ -69,6 +69,40 @@ jobs:
       - name: sdwrite device-targeting rules
         run: python -m pytest tools/test_sdwrite.py -v
 
+  # The fabric cartridge, against the REAL controller. Not a cocotb suite: it is
+  # plain Verilog so it runs anywhere iverilog does, including the Windows host
+  # this project is developed on, where cocotb cannot currently be installed.
+  #
+  # It is the only check that fpga/bram_cart.sv answers the protocol
+  # src/qspi_ctrl.sv actually speaks rather than the one its author believed it
+  # speaks -- and with the memory in fabric, every instruction the CPU executes
+  # comes through it.
+  cartridge:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install iverilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      # bram_cart's $readmemh paths are relative to the repo root, and a
+      # $readmemh that finds nothing is SILENT -- the array stays X and the
+      # symptom is a CPU that looks broken. So build the image first and fail
+      # here if it cannot be built.
+      - name: build the flash image
+        run: python tools/mkhex.py sw/game.bin fpga/build/game_lo.hex fpga/build/game_hi.hex
+
+      - name: bram_cart vs qspi_ctrl
+        run: |
+          iverilog -g2012 -o /tmp/tb_bram_cart.vvp -s tb_bram_cart \
+            src/qspi_ctrl.sv fpga/bram_cart.sv test/tb_bram_cart.v
+          vvp /tmp/tb_bram_cart.vvp | tee /tmp/cart.log
+          grep -q "tb_bram_cart: PASS" /tmp/cart.log
+
   # The Windows host this project is developed on has no `make`, so the
   # Makefile can only be verified here. It runs the twin suite, which is
   # the one with a build step (the netlist module rename) in front of it.

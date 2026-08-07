@@ -167,11 +167,63 @@ module ulx3s_top (
   );
 
   // B, Y, Select, Start, Up, Down, Left, Right — the low 8 of the pad's 12.
+`ifdef BTN_ONBOARD
+  // ------------------------------------------- the ULX3S's own six buttons
+  // RUNG 3: controls that need no Pmod either. The board's buttons land on the
+  // SAME eight ui_in bits the Gamepad Pmod drives, so the chip's decode, the
+  // register map and sw/console.h are all untouched -- this is a different
+  // source for ui_in, not a different interface.
+  //
+  //   btn[1] FIRE1 -> B        btn[3] UP     btn[5] LEFT
+  //   btn[2] FIRE2 -> Y        btn[4] DOWN   btn[6] RIGHT
+  //
+  // Select and Start have no button on this board and read 0. btn[0] is PWR
+  // and is the reset, so it is not available as a game button.
+  //
+  // btn[1..6] are PULLMODE=DOWN in ulx3s.lpf: open reads 0, pressed reads 1, so
+  // no inversion. btn[0] is the exception (PULLMODE=UP, active low) and is
+  // handled by the reset logic above.
+  //
+  // Two flops before anything looks at them, because these are asynchronous
+  // inputs from a mechanical switch and a metastable sample propagating into
+  // the CPU's MMIO read is not a failure anyone would diagnose as a button.
+  // Then a ~2.6 ms sampling tick, which is a debounce cheap enough to be
+  // obviously correct: contact bounce settles in well under a millisecond, and
+  // 380 samples/second is far more than a game needs.
+  logic [6:1] btn_s1, btn_s2, btn_deb;
+  logic [15:0] deb_div;
+
+  always_ff @(posedge clk_25mhz) begin
+    btn_s1  <= btn[6:1];
+    btn_s2  <= btn_s1;
+    deb_div <= deb_div + 16'd1;
+    if (deb_div == 16'd0) btn_deb <= btn_s2;
+  end
+
+  wire [7:0] ui_in = {btn_deb[6],    // RIGHT
+                      btn_deb[5],    // LEFT
+                      btn_deb[4],    // DOWN
+                      btn_deb[3],    // UP
+                      1'b0,          // START  — no button on this board
+                      1'b0,          // SELECT — no button on this board
+                      btn_deb[2],    // Y  = FIRE2
+                      btn_deb[1]};   // B  = FIRE1
+`else
   wire [7:0] ui_in = pad_btn[7:0];
+`endif
 
   // ------------------------------------------------------- the console chip
   wire [7:0] uo_out, uio_out, uio_oe;
+`ifdef CART_BRAM
+  // The fabric cartridge is already "programmed" — its flash array is loaded
+  // from sw/game.bin at configuration time — so there is nothing for the SD
+  // loader to do and it never takes the bus. Holding the SoC in reset until
+  // ldr_done would work too, but bypassing it keeps the loader's flash-program
+  // opcodes (06h/20h/02h) away from a model that implements none of them.
+  wire soc_rst_n = !rst;
+`else
   wire soc_rst_n = ldr_done && !rst;          // held in reset until the load ends
+`endif
 
   tt_um_joonatanalanampa_console console (
       .ui_in   (ui_in),
@@ -191,8 +243,22 @@ module ulx3s_top (
   wire [7:0] ld_out = {1'b0, 1'b1, 1'b1, 1'b1, ldr_sck, 1'b0, ldr_mosi, ldr_cs_n};
   wire [7:0] ld_oe  = {1'b1, 1'b1, 1'b1, 1'b1, 1'b1,    1'b0, 1'b1,     1'b1};
 
-  wire [7:0] bus_out = ldr_owns ? ld_out : uio_out;
-  wire [7:0] bus_oe  = ldr_owns ? ld_oe  : uio_oe;
+  // ⚠ The loader must not own the bus when the cartridge is in fabric. Gating
+  // only its RESET (soc_rst_n above) is not enough and the difference is a real
+  // startup race: with the SoC running from the first cycle, its opening flash
+  // fetch happens while ldr_owns is still high, so bram_cart sees the loader's
+  // chip select instead, then sees CS drop mid-stream and decodes whatever
+  // fragment is left as an opcode. Found on hardware by the bad_cmd LED lighting
+  // beside a game that had booted perfectly — i.e. it went right by luck, which
+  // is the least durable way for a race to go.
+`ifdef CART_BRAM
+  wire ldr_owns_eff = 1'b0;
+`else
+  wire ldr_owns_eff = ldr_owns;
+`endif
+
+  wire [7:0] bus_out = ldr_owns_eff ? ld_out : uio_out;
+  wire [7:0] bus_oe  = ldr_owns_eff ? ld_oe  : uio_oe;
 
   // ------------------------------------------------------- audio, both jacks
   // The console has ONE audio source: the sigma-delta bit on uio[7]. It goes
@@ -220,10 +286,40 @@ module ulx3s_top (
     assign pmod_gn[n] = bus_oe[gni] ? bus_out[gni] : 1'bz;
   end endgenerate
 
+`ifdef CART_BRAM
+  // ------------------------------------------- the cartridge, in fabric
+  // J1 is a row of bare holes on this board, so the memory the SoC boots from
+  // lives in the 85F's own block RAM instead. bram_cart is a QSPI *device*, not
+  // a shortcut: the chip still boots by XIP from "flash" 0 and the video engine
+  // still races the beam against the same shared bus through the same arbiter.
+  // The header above is still driven, so a scope (or a Pmod, once headers are
+  // soldered) sees exactly the traffic it always would.
+  wire [3:0] cart_sd_in;
+  wire       cart_bad;
+
+  bram_cart cart_bram (
+      .clk        (clk_25mhz),
+      .rst        (rst),
+      .cs_flash_n (bus_out[0]),
+      .cs_ram_n   (bus_out[6]),
+      .sd_out     ({bus_out[5], bus_out[4], bus_out[2], bus_out[1]}),
+      .sd_oe      ({bus_oe[5],  bus_oe[4],  bus_oe[2],  bus_oe[1]}),
+      .sd_in      (cart_sd_in),
+      .bad_cmd    (cart_bad)
+  );
+
+  // uio: 0=CS0 1=SD0 2=SD1 3=SCK 4=SD2 5=SD3 6=CS1 7=audio. Everything the
+  // model does not drive reads high, exactly as the Pmod's pull-ups make it.
+  assign bus_in = {1'b1, 1'b1, cart_sd_in[3], cart_sd_in[2],
+                   1'b1, cart_sd_in[1], cart_sd_in[0], 1'b1};
+`else
+  wire cart_bad = 1'b0;
+
   generate for (genvar k = 0; k < 8; k++) begin : g_cart_in
     assign bus_in[k] = ((k < 4) ^ cart_map_b) ? pmod_gp[3 - (k & 3)]
                                               : pmod_gn[3 - (k & 3)];
   end endgenerate
+`endif
 
   // ------------------------------------------------------- VGA Pmod
   // Same 2x6 geometry as the cartridge, so the same algebra — outputs only.
@@ -363,14 +459,26 @@ module ulx3s_top (
   //
   // So the healthy pre-software state is led[7] on, [6:4] off, [3:0] counting,
   // and the monitor showing the test card. led[4] lighting is the handover.
+  //
+  // With CART_BRAM there is no loader to report, so led[3] becomes the fabric
+  // cartridge's "opcode I do not implement" flag and the frame counter gives up
+  // its top bit. That bit matters more than a fourth frame bit: a memory model
+  // that silently returned zeroes for an unimplemented opcode would look
+  // exactly like working hardware running a broken program.
   always_comb begin
-    // SW4 = gamepad bring-up aid. The Pmod is a black box with no cable to
-    // meter, so "press B, watch LED0" is the only cheap way to prove the
-    // controller path end to end before trusting it in a game.
-    if (sw[3])                     led = pad_btn[7:0];
+    // SW4 = controller bring-up aid: it shows the eight bits the chip is
+    // actually being handed, whichever source they come from. "Press a button,
+    // watch an LED" separates a dead button from a dead decode from a dead
+    // game, and it is the only cheap way to do that before trusting input.
+    if (sw[3])                     led = ui_in;
+`ifdef CART_BRAM
+    else                           led = {pll_lock, phase_err, sync_err,
+                                          soc_drew, cart_bad, frames[2:0]};
+`else
     else if (ldr_err || !ldr_done) led = ldr_status;   // loader diagnostics
     else                           led = {pll_lock, phase_err, sync_err,
                                           soc_drew, frames[3:0]};
+`endif
   end
 
 endmodule

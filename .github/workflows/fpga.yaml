@@ -60,15 +60,40 @@ jobs:
           yosys -V
           nextpnr-ecp5 --version
 
-      # Source list comes from fpga/sources.txt — the same file synth.ps1
-      # reads, so the two builders cannot drift apart.
-      - name: synthesis (yosys)
+      # The flash image, split into bram_cart's two byte lanes. Regenerated from
+      # sw/game.bin rather than committed, so the bitstream cannot ship a copy
+      # of the game that has drifted from the source.
+      - name: build the flash image
         run: |
           mkdir -p fpga/build
+          python tools/mkhex.py sw/game.bin fpga/build/game_lo.hex fpga/build/game_hi.hex
+
+      # Source list comes from fpga/sources.txt — the same file synth.ps1
+      # reads, so the two builders cannot drift apart. The DEFINES must match
+      # synth.ps1's default too:
+      #   SYNTHESIS   gates a simulation-only memory-zeroing loop that yosys
+      #               would otherwise unroll 65536 times (a 6-minute build)
+      #   CART_BRAM   memory in FPGA block RAM instead of the Cartridge Pmod
+      #   BTN_ONBOARD controls on the board's buttons instead of the Gamepad Pmod
+      # This is the no-Pmod console, which is the one that runs on the bench:
+      # J1/J2 ship as bare holes.
+      - name: synthesis (yosys)
+        run: |
           src=$(grep -vE '^[[:space:]]*(#|$)' fpga/sources.txt | tr '\n' ' ')
           echo "sources: $src"
           yosys -l fpga/build/yosys.log \
-            -p "read_verilog -sv -I src $src; synth_ecp5 -top ulx3s_top -json fpga/build/console.json"
+            -p "read_verilog -sv -DSYNTHESIS -DCART_BRAM -DBTN_ONBOARD -I src $src; synth_ecp5 -top ulx3s_top -json fpga/build/console.json"
+
+      # The Cartridge-Pmod / Gamepad-Pmod build is no longer the default, so
+      # nothing else would ever compile those branches and they would rot
+      # silently until the day someone solders headers on. Synthesis only, no
+      # place-and-route: it costs under a minute and catches the whole class of
+      # failure that matters here (an `else` branch that no longer elaborates).
+      - name: the Pmod variant still synthesises
+        run: |
+          src=$(grep -vE '^[[:space:]]*(#|$)' fpga/sources.txt | tr '\n' ' ')
+          yosys -l fpga/build/yosys-pmod.log \
+            -p "read_verilog -sv -DSYNTHESIS -I src $src; synth_ecp5 -top ulx3s_top -json fpga/build/console-pmod.json"
 
       # nextpnr fails by design when the 25 MHz constraint in fpga/ulx3s.lpf is
       # not met. Capture its exit code instead of letting the step die, so the
