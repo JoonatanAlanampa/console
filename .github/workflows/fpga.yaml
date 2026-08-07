@@ -63,10 +63,13 @@ jobs:
       # The flash image, split into bram_cart's two byte lanes. Regenerated from
       # sw/game.bin rather than committed, so the bitstream cannot ship a copy
       # of the game that has drifted from the source.
+      # sw/mario.bin is committed like sw/game.bin, because this job has no
+      # RISC-V toolchain: software is built on the developer's machine with
+      # sw/build.py and the image ships in the repo.
       - name: build the flash image
         run: |
           mkdir -p fpga/build
-          python tools/mkhex.py sw/game.bin fpga/build/game_lo.hex fpga/build/game_hi.hex
+          python tools/mkhex.py sw/mario.bin fpga/build/game_lo.hex fpga/build/game_hi.hex
 
       # Source list comes from fpga/sources.txt — the same file synth.ps1
       # reads, so the two builders cannot drift apart. The DEFINES must match

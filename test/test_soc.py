@@ -14,7 +14,11 @@ RAM_SIZE = 1 << 16
 TILEMAP_BASE = 0x010000
 PATTERN_BASE = 0x008000
 TILES = 20
-PAL = [(0, 0, 0), (3, 0, 0), (0, 3, 0), (3, 3, 3)]
+# Must match console_soc.sv's vga_engine instantiation, NOT vga_engine's own
+# defaults: the SoC overrides PAL0 to sky blue because it is the background and
+# the sprite-transparent colour. test_vengine.py drives vga_engine directly and
+# so keeps the unoverridden black.
+PAL = [(1, 2, 3), (3, 0, 0), (0, 3, 0), (3, 3, 3)]
 
 # MMIO word offsets (sysregs)
 OAM0, SYSCTL, AUD0, PADS = 0x00, 0x08, 0x10, 0x18

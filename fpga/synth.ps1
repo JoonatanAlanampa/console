@@ -25,7 +25,11 @@
 # `-Pmod` builds the original Cartridge-Pmod + Gamepad-Pmod design instead. It
 # is the same RTL either way -- nothing was deleted, only made selectable -- so
 # the Pmod path is still there for the day the headers are soldered.
-param([switch]$SynthOnly, [switch]$Pmod)
+#
+# -Game picks which cartridge image is baked into the block RAM. `mario` is the
+# one-stage platformer; `game` is the original end-to-end demo the cocotb
+# suites still use.
+param([switch]$SynthOnly, [switch]$Pmod, [string]$Game = "mario")
 
 $ErrorActionPreference = "Stop"
 $oss = "$env:USERPROFILE\opt\oss-cad-suite"
@@ -47,7 +51,9 @@ if (-not $src) { throw "fpga\sources.txt listed no sources" }
 # second copy of the game, and it would drift silently -- as a console that
 # boots the program you edited yesterday.
 if (-not $Pmod) {
-    python tools\mkhex.py sw\game.bin fpga\build\game_lo.hex fpga\build\game_hi.hex
+    $img = "sw\$Game.bin"
+    if (-not (Test-Path $img)) { throw "$img not found - run: python sw\build.py $Game" }
+    python tools\mkhex.py $img fpga\build\game_lo.hex fpga\build\game_hi.hex
     if ($LASTEXITCODE -ne 0) { throw "tools\mkhex.py failed" }
 }
 

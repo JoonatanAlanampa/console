@@ -135,7 +135,15 @@ module console_soc #(
   logic        vid_ack, vid_rvalid;
   logic [7:0]  m_rdata_bus;                    // shared arbiter read data
 
-  vga_engine #(.PATTERN_BASE (PATTERN_BASE)) eng (
+  // PAL0 is the background AND the transparent index for sprites, so it is the
+  // one colour that is on screen everywhere something else is not. Black is the
+  // right default for a test pattern; sky blue is the right one for a console
+  // with four colours to spend, and it costs nothing but this override.
+  // The other three stay at vga_engine's defaults (red, green, white), which is
+  // what sw/mkart.py draws against.
+  vga_engine #(.PATTERN_BASE (PATTERN_BASE),
+               .PAL0 (6'b011011))          // RGB222 sky blue
+             eng (
       .clk (clk), .rst (rst),
       .de (de), .x (vx), .y (vy), .frame_start (frame_start),
       .line_fetch (line_fetch), .next_y (next_y), .oam (oam),

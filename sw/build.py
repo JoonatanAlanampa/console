@@ -34,6 +34,12 @@ def build(name):
     elf = SW / f"{name}.elf"
     binf = SW / f"{name}.bin"
 
+    # sw/patterns.inc is GENERATED from the pixel art in sw/mkart.py. Running it
+    # here rather than committing the output is what stops the art and the tiles
+    # on screen from drifting apart -- a drift whose only symptom is a picture
+    # that looks subtly wrong.
+    subprocess.run([sys.executable, str(SW / "mkart.py")], check=True)
+
     subprocess.run([str(XPACK / f"riscv-none-elf-gcc{EXE}"),
                     "-march=rv32e", "-mabi=ilp32e", "-Os",
                     "-ffreestanding", "-fno-builtin",

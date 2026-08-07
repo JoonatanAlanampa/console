@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""mkart.py — turn 8x8 pixel art into the console's 2bpp planar pattern table.
+
+    python sw/mkart.py            # -> sw/patterns.inc
+
+sw/build.py runs this before every compile, so THE ART BELOW IS THE SOURCE OF
+TRUTH and sw/patterns.inc is generated. Editing the .inc by hand is pointless:
+the next build overwrites it.
+
+The art is here rather than as hex in the C file because hand-computing bitplane
+bytes is exactly the kind of task that produces a plausible-looking tile that is
+wrong in one pixel, and the only way to notice is to look at a monitor.
+
+Palette (see console_soc.sv): 0 = sky blue, 1 = red, 2 = green, 3 = white.
+Colour 0 is TRANSPARENT for sprites, which is why every sprite is drawn on 0.
+
+Each row is two bytes: the first carries colour bit 1 of all eight pixels, the
+second carries bit 0, MSB = leftmost pixel. So a pixel's palette index is
+(hi >> (7-col) & 1) << 1 | (lo >> (7-col) & 1).
+"""
+
+import sys
+from pathlib import Path
+
+T = {}
+
+T["EMPTY"] = """
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000"""
+
+# Ground: the surface block. White mortar, red body, staggered courses.
+T["GROUND"] = """
+33333333
+31113111
+31113111
+33333333
+11311131
+11311131
+11311131
+33333333"""
+
+T["GFILL"] = """
+11311131
+11311131
+33333333
+31113111
+31113111
+33333333
+11311131
+11311131"""
+
+T["BRICK"] = """
+33333333
+11131111
+11131111
+33333333
+11111311
+11111311
+11111311
+33333333"""
+
+# Question block: white block, red frame, a red '?' in the middle.
+T["QBLOCK"] = """
+11111111
+13333331
+13311331
+13313331
+13333131
+13311131
+13333331
+11111111"""
+
+T["USED"] = """
+11111111
+13333331
+13111131
+13111131
+13111131
+13111131
+13333331
+11111111"""
+
+# Pipe: green with a white highlight down the left, and a lip on the top row.
+T["PIPETL"] = """
+33333333
+32222222
+32333333
+32322222
+32322222
+32322222
+32322222
+32322222"""
+
+T["PIPETR"] = """
+33333333
+22222223
+33333323
+22222323
+22222323
+22222323
+22222323
+22222323"""
+
+T["PIPEBL"] = """
+03222222
+03233333
+03232222
+03232222
+03232222
+03232222
+03232222
+03232222"""
+
+T["PIPEBR"] = """
+22222230
+33333230
+22223230
+22223230
+22223230
+22223230
+22223230
+22223230"""
+
+T["CLOUDL"] = """
+00000000
+00000333
+00003333
+00033333
+00333333
+03333333
+00000000
+00000000"""
+
+T["CLOUDR"] = """
+00000000
+33300000
+33330000
+33333000
+33333300
+33333330
+00000000
+00000000"""
+
+T["BUSH"] = """
+00000000
+00000000
+00022000
+00222200
+02222220
+22222222
+22222222
+22222222"""
+
+T["HILL"] = """
+00022000
+00222200
+02222220
+02222220
+22222222
+22222222
+22222222
+22222222"""
+
+T["STONE"] = """
+33333333
+31111113
+31111113
+31111113
+31111113
+31111113
+31111113
+33333333"""
+
+T["COIN"] = """
+00033000
+00333300
+03311330
+03133130
+03133130
+03311330
+00333300
+00033000"""
+
+T["POLE"] = """
+00033000
+00032000
+00032000
+00032000
+00032000
+00032000
+00032000
+00032000"""
+
+T["FLAG"] = """
+00033000
+00032000
+00033330
+00033330
+00033330
+00032000
+00032000
+00032000"""
+
+# ---- sprites: colour 0 is transparent ----
+T["MARIO_STAND"] = """
+00111000
+01111100
+00333000
+03333300
+00111000
+01131100
+00111000
+01100110"""
+
+T["MARIO_WALK1"] = """
+00111000
+01111100
+00333000
+03333300
+00111000
+01131100
+00111000
+00110110"""
+
+T["MARIO_WALK2"] = """
+00111000
+01111100
+00333000
+03333300
+00111000
+01131100
+00111000
+01101100"""
+
+T["MARIO_JUMP"] = """
+00111000
+01111100
+00333000
+03333300
+01131100
+01111100
+00111000
+01100110"""
+
+T["GOOMBA1"] = """
+00333300
+03111130
+31311313
+31111113
+31111113
+03111130
+00333300
+03300330"""
+
+T["GOOMBA2"] = """
+00333300
+03111130
+31311313
+31111113
+31111113
+03111130
+00333300
+00333300"""
+
+T["GOOMBA_FLAT"] = """
+00000000
+00000000
+00000000
+00000000
+00333300
+03111130
+31311313
+33333333"""
+
+
+def planes(art):
+    rows = [r for r in art.strip().splitlines()]
+    assert len(rows) == 8, rows
+    out = []
+    for r in rows:
+        assert len(r) == 8, r
+        hi = lo = 0
+        for c, ch in enumerate(r):
+            v = int(ch)
+            bit = 7 - c
+            hi |= ((v >> 1) & 1) << bit
+            lo |= (v & 1) << bit
+        out.append((hi, lo))
+    return out
+
+
+# Tile indices 0..17, then a gap, then sprites from 32. The gap is deliberate:
+# it keeps "is this a background tile or a sprite?" answerable from the number
+# alone while debugging on hardware, where the number is all you have.
+ORDER = ["EMPTY", "GROUND", "GFILL", "BRICK", "QBLOCK", "USED",
+         "PIPETL", "PIPETR", "PIPEBL", "PIPEBR",
+         "CLOUDL", "CLOUDR", "BUSH", "HILL", "STONE", "COIN", "POLE", "FLAG"]
+SPRITE_BASE = 32
+SPRITES = ["MARIO_STAND", "MARIO_WALK1", "MARIO_WALK2", "MARIO_JUMP",
+           "GOOMBA1", "GOOMBA2", "GOOMBA_FLAT"]
+
+
+def emit(out, index, name):
+    out.append(f"    /* {index:3d} {name} */")
+    for row, (hi, lo) in zip(T[name].strip().splitlines(), planes(T[name])):
+        out.append(f"    0x{hi:02X},0x{lo:02X},   /* {row} */")
+    out.append("")
+
+
+def main():
+    out = ["/* GENERATED BY sw/mkart.py -- DO NOT EDIT. Edit the art there. */",
+           ""]
+    for i, name in enumerate(ORDER):
+        emit(out, i, name)
+
+    out.append(f"    /* {len(ORDER)}..{SPRITE_BASE - 1}: unused, kept zero so an"
+               " out-of-range tile index draws sky */")
+    for i in range(len(ORDER), SPRITE_BASE):
+        out.append("    " + "0x00,0x00, " * 8)
+    out.append("")
+
+    for i, name in enumerate(SPRITES):
+        emit(out, SPRITE_BASE + i, name)
+
+    # The C array is declared [4096] with fewer initialisers, so the remaining
+    # tiles are zero-filled by the language. Check the count anyway: a table
+    # that overran 4 KiB would push nothing and silently corrupt nothing -- it
+    # would just be wrong on screen, which is the hardest kind to attribute.
+    n = (SPRITE_BASE + len(SPRITES)) * 16
+    if n > 4096:
+        raise SystemExit(f"pattern table is {n} bytes, over the 4096 the "
+                         f"hardware reads (256 tiles x 16)")
+
+    dest = Path(__file__).parent / "patterns.inc"
+    dest.write_text("\n".join(out) + "\n")
+    print(f"{dest.name}: {len(ORDER)} tiles + {len(SPRITES)} sprites, "
+          f"{n} of 4096 bytes used")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
